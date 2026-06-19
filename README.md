@@ -8,8 +8,8 @@ Each piece is a self-contained, browser-native interface. Nothing to install, no
 
 ## ▸ View live
 
-- **Aurora OS** — https://tmanish.github.io/ui-experiments/ui/aurora-os.html
-- **Ubuntu Terminal** — https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html
+- **Aurora OS** — <a href="https://tmanish.github.io/ui-experiments/ui/aurora-os.html">https://tmanish.github.io/ui-experiments/ui/aurora-os.html</a>
+- **Ubuntu Terminal** — <a href="https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html">https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html</a>
 
 ## The experiments
 
