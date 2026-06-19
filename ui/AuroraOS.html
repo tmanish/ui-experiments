@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aurora OS</title>
+<!-- Real CPython, compiled to WebAssembly (Pyodide). The terminal's `python`
+     command executes through this — it is not simulated. Loaded lazily on
+     first use from the official Pyodide CDN. -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+  // Lazy Python runtime: only boots CPython when the user first runs `python`.
+  window.__py = { instance:null, loading:null };
+  window.bootPython = function(onStatus){
+    if(window.__py.instance) return Promise.resolve(window.__py.instance);
+    if(window.__py.loading) return window.__py.loading;
+    window.__py.loading = (async ()=>{
+      if(typeof loadPyodide !== 'function')
+        throw new Error('Pyodide failed to load (offline?). Python needs a network connection on first run.');
+      if(onStatus) onStatus('Booting CPython 3.12 (WebAssembly)…');
+      const py = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+      window.__py.instance = py;
+      return py;
+    })();
+    return window.__py.loading;
+  };
+</script>
+<style>
+  /* ============ DESIGN TOKENS ============
+     Palette: deep slate base, "aurora" cyan→violet accent, warm amber for terminal
+     Type: JetBrains Mono for system/terminal, Inter for app chrome
+  */
+  :root{
+    --bg-0:#0b0e14;          /* deepest desktop void */
+    --bg-1:#12161f;          /* panel */
+    --bg-2:#1a1f2b;          /* window body */
+    --bg-3:#232a38;          /* raised */
+    --line:#2c3444;          /* hairline */
+    --line-2:#3a4456;
+    --ink:#e6ebf2;           /* primary text */
+    --ink-dim:#8a94a6;       /* secondary */
+    --ink-faint:#5b6577;
+    --aurora-1:#22d3ee;      /* cyan */
+    --aurora-2:#818cf8;      /* indigo */
+    --aurora-3:#c084fc;      /* violet */
+    --amber:#fbbf24;         /* terminal prompt */
+    --green:#4ade80;
+    --red:#f87171;
+    --shadow: 0 18px 50px -12px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.04);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: Inter, system-ui, -apple-system, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:var(--sans);
+    background:var(--bg-0);
+    color:var(--ink);
+    user-select:none;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ============ DESKTOP ============ */
+  #desktop{
+    position:fixed; inset:0;
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(129,140,248,.18), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(34,211,238,.12), transparent 55%),
+      radial-gradient(600px 600px at 50% 50%, rgba(192,132,252,.06), transparent 70%),
+      var(--bg-0);
+    overflow:hidden;
+  }
+  /* subtle grid texture */
+  #desktop::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:radial-gradient(ellipse at center, black 40%, transparent 90%);
+  }
+
+  /* ============ DESKTOP ICONS ============ */
+  #icons{position:absolute; top:24px; left:24px; display:flex; flex-direction:column; gap:6px; z-index:1}
+  .dicon{
+    width:88px; padding:12px 8px; border-radius:12px; text-align:center;
+    cursor:pointer; transition:background .12s; display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .dicon:hover{background:rgba(255,255,255,.06)}
+  .dicon .glyph{width:48px;height:48px;display:grid;place-items:center;border-radius:13px;
+    background:linear-gradient(145deg,var(--bg-3),var(--bg-2));border:1px solid var(--line);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05); color:var(--aurora-1); padding:12px}
+  .dicon .glyph svg{width:100%;height:100%}
+  .dicon span{font-size:12px; color:var(--ink); line-height:1.2; max-width:84px}
+
+  /* ============ WINDOWS ============ */
+  .win{
+    position:absolute; min-width:320px; min-height:200px;
+    background:var(--bg-2); border:1px solid var(--line-2); border-radius:12px;
+    box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden;
+    animation:winIn .18s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes winIn{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
+  .win.min{display:none}
+  .win.max{border-radius:0!important}
+  .titlebar{
+    height:38px; flex:0 0 38px; display:flex; align-items:center; gap:10px;
+    padding:0 12px; background:linear-gradient(180deg,var(--bg-3),var(--bg-1));
+    border-bottom:1px solid var(--line); cursor:grab;
+  }
+  .titlebar.drag{cursor:grabbing}
+  .lights{display:flex; gap:8px}
+  .light{width:12px;height:12px;border-radius:50%;cursor:pointer;border:none;position:relative}
+  .light.c{background:#ff5f57} .light.m{background:#febc2e} .light.x{background:#28c840}
+  .light:hover::after{content:"";position:absolute;inset:3px;border-radius:50%;background:rgba(0,0,0,.35)}
+  .titlebar .ttl{font-size:12.5px;font-weight:500;color:var(--ink-dim);flex:1;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    overflow:hidden;white-space:nowrap;pointer-events:none}
+  .titlebar .ttl-text{overflow:hidden;text-overflow:ellipsis}
+  .titlebar .tico{width:15px;height:15px;flex:0 0 15px;color:var(--aurora-1);opacity:.85}
+  .titlebar .tico svg{width:100%;height:100%}
+  .winbody{flex:1; overflow:auto; position:relative; background:var(--bg-2)}
+  .resize{position:absolute;width:14px;height:14px;right:0;bottom:0;cursor:nwse-resize;z-index:5}
+
+  /* ============ TASKBAR ============ */
+  #taskbar{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:12px; z-index:9999;
+    height:58px; padding:0 8px; display:flex; align-items:center; gap:6px;
+    background:rgba(18,22,31,.72); backdrop-filter:blur(20px) saturate(1.4);
+    border:1px solid var(--line-2); border-radius:18px; box-shadow:var(--shadow);
+  }
+  .tb-btn{
+    width:46px;height:46px;border-radius:13px;border:none;cursor:pointer;
+    display:grid;place-items:center;font-size:21px;position:relative;
+    background:transparent;transition:transform .12s, background .12s;
+  }
+  .tb-btn:hover{background:rgba(255,255,255,.08);transform:translateY(-3px)}
+  .tb-btn .glyph{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;
+    background:linear-gradient(145deg,var(--bg-3),var(--bg-2));border:1px solid var(--line);
+    color:var(--aurora-1);padding:8px}
+  .tb-btn .glyph svg{width:100%;height:100%}
+  .tb-btn .startglyph{padding:8px}
+  .tb-btn.active::after{content:"";position:absolute;bottom:1px;left:50%;transform:translateX(-50%);
+    width:5px;height:5px;border-radius:50%;background:var(--aurora-1)}
+  .tb-div{width:1px;height:30px;background:var(--line-2);margin:0 4px}
+  #clock{font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:center;
+    padding:0 12px;line-height:1.3;min-width:74px}
+  #clock b{color:var(--ink);font-weight:500;font-size:13px;display:block}
+
+  /* ============ TERMINAL ============ */
+  .term{font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--ink);
+    padding:12px 14px;height:100%;overflow-y:auto;background:#0a0d13;cursor:text}
+  .term .ln{white-space:pre-wrap;word-break:break-word}
+  .term .pmt{color:var(--green)}
+  .term .pmt .u{color:var(--aurora-1)} .term .pmt .p{color:var(--aurora-3)}
+  .term .err{color:var(--red)} .term .ok{color:var(--green)}
+  .term .dir{color:var(--aurora-1);font-weight:500} .term .exe{color:var(--amber)}
+  .term .dim{color:var(--ink-faint)}
+  .term-input-row{display:flex}
+  .term-input{flex:1;background:transparent;border:none;outline:none;color:var(--ink);
+    font-family:var(--mono);font-size:13px;caret-color:var(--aurora-1)}
+
+  /* ============ FILE MANAGER ============ */
+  .fm{display:flex;height:100%;font-size:13px}
+  .fm-side{width:160px;flex:0 0 160px;background:var(--bg-1);border-right:1px solid var(--line);padding:10px 8px}
+  .fm-side .grp{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint);
+    padding:8px 8px 4px}
+  .fm-side .it{padding:7px 10px;border-radius:7px;cursor:pointer;color:var(--ink-dim);display:flex;gap:9px;align-items:center}
+  .fm-side .si{width:16px;height:16px;flex:0 0 16px;display:block;opacity:.9}
+  .fm-side .si svg{width:100%;height:100%}
+  .fm-side .it:hover{background:rgba(255,255,255,.05);color:var(--ink)}
+  .fm-side .it.on{background:rgba(34,211,238,.12);color:var(--aurora-1)}
+  .fm-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .fm-bar{height:36px;flex:0 0 36px;display:flex;align-items:center;gap:8px;padding:0 12px;
+    border-bottom:1px solid var(--line);color:var(--ink-dim);font-family:var(--mono);font-size:12px}
+  .fm-bar .nav{cursor:pointer;padding:3px 8px;border-radius:5px;display:inline-flex;align-items:center;gap:5px}
+  .fm-bar .ni{width:13px;height:13px;display:block}
+  .fm-bar .ni svg{width:100%;height:100%}
+  .fm-bar .nav:hover{background:rgba(255,255,255,.07);color:var(--ink)}
+  .fm-grid{flex:1;overflow:auto;padding:14px;display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;align-content:start}
+  .fm-item{padding:12px 6px;border-radius:10px;text-align:center;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:7px;transition:background .1s}
+  .fm-item:hover{background:rgba(255,255,255,.06)}
+  .fm-item .ic{width:40px;height:40px;color:var(--ink-dim)}
+  .fm-item .ic.isdir{color:var(--aurora-1)}
+  .fm-item .ic svg{width:100%;height:100%}
+  .fm-item .nm{font-size:11.5px;color:var(--ink);word-break:break-word;line-height:1.25;max-width:84px}
+
+  /* ============ TEXT EDITOR ============ */
+  .editor{display:flex;flex-direction:column;height:100%}
+  .ed-bar{height:34px;flex:0 0 34px;display:flex;align-items:center;gap:6px;padding:0 10px;
+    border-bottom:1px solid var(--line);background:var(--bg-1)}
+  .ed-bar button{background:var(--bg-3);border:1px solid var(--line);color:var(--ink-dim);
+    font-family:var(--mono);font-size:11.5px;padding:4px 12px;border-radius:6px;cursor:pointer}
+  .ed-bar button:hover{color:var(--ink);border-color:var(--line-2)}
+  .ed-bar .fname{flex:1;font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
+  .ed-area{flex:1;background:#0a0d13;border:none;outline:none;resize:none;color:var(--ink);
+    font-family:var(--mono);font-size:13px;line-height:1.6;padding:14px 16px;tab-size:2}
+
+  /* ============ ABOUT ============ */
+  .about{padding:0;height:100%;overflow:auto;background:
+    radial-gradient(700px 400px at 80% -20%, rgba(129,140,248,.15), transparent 60%), var(--bg-2)}
+  .about-hero{padding:36px 32px 28px;border-bottom:1px solid var(--line)}
+  .about-logo{font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.3em;
+    color:var(--aurora-1);text-transform:uppercase;margin-bottom:14px}
+  .about-hero h1{font-size:38px;font-weight:600;letter-spacing:-.02em;line-height:1.05;margin-bottom:10px}
+  .about-hero h1 .grad{background:linear-gradient(110deg,var(--aurora-1),var(--aurora-2) 50%,var(--aurora-3));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .about-hero p{color:var(--ink-dim);font-size:14px;max-width:440px;line-height:1.6}
+  .about-grid{padding:24px 32px;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+    border-radius:12px;margin:24px 32px;overflow:hidden;border:1px solid var(--line)}
+  .about-cell{background:var(--bg-2);padding:18px 20px}
+  .about-cell .k{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .about-cell .v{font-size:14px;color:var(--ink);font-weight:500}
+  .about-cmds{padding:0 32px 32px}
+  .about-cmds h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);
+    margin-bottom:12px;font-family:var(--mono)}
+  .about-cmds code{font-family:var(--mono);font-size:12px;background:var(--bg-0);color:var(--aurora-1);
+    padding:2px 8px;border-radius:5px;border:1px solid var(--line);margin:0 4px 6px 0;display:inline-block}
+
+  /* monitor */
+  .mon{padding:18px;font-family:var(--mono);font-size:12px;height:100%;overflow:auto}
+  .mon .row{margin-bottom:18px}
+  .mon .lbl{display:flex;justify-content:space-between;color:var(--ink-dim);margin-bottom:6px;font-size:11px}
+  .mon .bar{height:8px;background:var(--bg-0);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+  .mon .fill{height:100%;border-radius:4px;transition:width .6s ease}
+  .mon table{width:100%;border-collapse:collapse;margin-top:8px}
+  .mon th{text-align:left;color:var(--ink-faint);font-weight:500;font-size:10px;text-transform:uppercase;
+    padding:6px 8px;border-bottom:1px solid var(--line)}
+  .mon td{padding:5px 8px;color:var(--ink-dim);border-bottom:1px solid rgba(255,255,255,.03)}
+  .mon td.n{color:var(--ink)}
+
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink-faint)}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* start menu */
+  #startmenu{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(10px);
+    width:380px;background:rgba(18,22,31,.85);backdrop-filter:blur(24px);border:1px solid var(--line-2);
+    border-radius:16px;box-shadow:var(--shadow);padding:16px;z-index:9998;opacity:0;pointer-events:none;
+    transition:opacity .15s, transform .15s}
+  #startmenu.open{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  #startmenu .sm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  #startmenu .sm-it{padding:14px 6px;border-radius:10px;cursor:pointer;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:8px;transition:background .1s}
+  #startmenu .sm-it:hover{background:rgba(255,255,255,.08)}
+  #startmenu .sm-it .g{width:30px;height:30px;color:var(--aurora-1)}
+  #startmenu .sm-it .g svg{width:100%;height:100%}
+  #startmenu .sm-it span{font-size:11px;color:var(--ink-dim)}
+  #startmenu .sm-head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint);
+    margin-bottom:10px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div id="desktop">
+  <div id="icons"></div>
+</div>
+
+<div id="startmenu">
+  <div class="sm-head">Aurora OS · Applications</div>
+  <div class="sm-grid" id="smGrid"></div>
+</div>
+
+<div id="taskbar">
+  <button class="tb-btn" id="startBtn" title="Start">
+    <span class="glyph startglyph" style="background:linear-gradient(145deg,var(--aurora-2),var(--aurora-3));border:none;color:#fff"></span>
+  </button>
+  <div class="tb-div"></div>
+  <div id="tbApps" style="display:flex;gap:6px"></div>
+  <div class="tb-div"></div>
+  <div id="clock"></div>
+</div>
+
+<script>
+/* ===================================================================
+   AURORA OS  —  a small operating-system feel in the browser
+   - virtual ext-like filesystem (in memory)
+   - window manager: drag, resize, focus, minimize, maximize, close
+   - terminal w/ ~30 commands, pipes-light, history, tab-complete
+   - apps: Terminal, Files, Editor, Monitor, About
+   =================================================================== */
+
+/* ---------- ICON LIBRARY ----------
+   Geometric 24x24 line icons. stroke=currentColor so each icon inherits
+   the color/size of its container. No emoji — legible at every size. */
+function svg(paths, opts){
+  opts=opts||{};
+  const fill=opts.fill||'none';
+  return `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="${fill}" stroke="currentColor"
+    stroke-width="${opts.sw||1.75}" stroke-linecap="round" stroke-linejoin="round"
+    style="display:block">${paths}</svg>`;
+}
+const ICON={
+  // app: terminal — a prompt chevron + cursor line in a frame
+  terminal: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/>'),
+  // app: files — folder
+  files: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  // app: editor — pencil over a page
+  editor: svg('<path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M13 4v5h5"/><path d="M9 17l1-3 4.5-4.5 2 2L12 16z"/>'),
+  // app: monitor — bar-chart gauge
+  monitor: svg('<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14v-3M11 14v-5M15 14v-2M8 21h8M12 18v3"/>'),
+  // app: about — concentric "aurora" mark
+  about: svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3"/>'),
+  // start button — grid of apps
+  start: svg('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
+
+  // sidebar: home
+  home: svg('<path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/>'),
+  // sidebar: documents
+  docs: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/>'),
+  // sidebar: projects (briefcase)
+  briefcase: svg('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>'),
+  // sidebar: root disk
+  disk: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>'),
+  // sidebar: settings gear (etc)
+  gear: svg('<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'),
+  // sidebar: logs (lines)
+  list: svg('<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>'),
+
+  // file types
+  fileText: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/><path d="M9 13h6M9 16h6M9 10h3"/>'),
+  fileCode: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/><path d="M10 12l-2 2 2 2M14 12l2 2-2 2"/>'),
+  fileWeb: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/><path d="M9 13l-1.5 4M13 13l1.5 4M11 13l1 4"/>'),
+  fileCfg: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/><circle cx="12" cy="15" r="1.6"/><path d="M12 12.4v.6M12 17v.6M9.4 15h.6M14 15h.6"/>'),
+  fileLog: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/><path d="M9 13h5M9 16h3"/>'),
+  fileGeneric: svg('<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5"/>'),
+  folder: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+};
+
+/* ---------- VIRTUAL FILESYSTEM ---------- */
+const FS = {
+  '/': {type:'dir', children:['home','etc','bin','usr','var','tmp']},
+  '/home': {type:'dir', children:['aurora']},
+  '/home/aurora': {type:'dir', children:['Documents','Projects','readme.txt','.bashrc','welcome.md']},
+  '/home/aurora/Documents': {type:'dir', children:['notes.txt','todo.md']},
+  '/home/aurora/Projects': {type:'dir', children:['hello.py','site.html']},
+  '/etc': {type:'dir', children:['hostname','os-release','motd']},
+  '/bin': {type:'dir', children:['ls','cat','echo','grep']},
+  '/usr': {type:'dir', children:['share']},
+  '/usr/share': {type:'dir', children:[]},
+  '/var': {type:'dir', children:['log']},
+  '/var/log': {type:'dir', children:['system.log']},
+  '/tmp': {type:'dir', children:[]},
+
+  '/home/aurora/readme.txt': {type:'file', content:
+`Welcome to Aurora OS.
+
+This is a complete desktop environment running entirely in your
+browser — no server, no backend, just one HTML file.
+
+Try the Terminal. It has a real (in-memory) filesystem you can
+navigate, edit, and break. Type 'help' to begin.`},
+
+  '/home/aurora/welcome.md': {type:'file', content:
+`# Aurora OS v1.0 "Borealis"
+
+A browser-native Linux-style environment.
+
+## What works
+- Window manager (drag / resize / min / max / focus)
+- Terminal with ~30 commands + tab completion + history
+- Files, Text Editor, System Monitor
+- A persistent in-memory filesystem shared across all apps
+
+## Fun things to try
+  $ ls -la
+  $ cat /etc/os-release
+  $ neofetch
+  $ echo "hi" > test.txt && cat test.txt
+  $ cowsay hello world
+`},
+
+  '/home/aurora/.bashrc': {type:'file', content:
+`# ~/.bashrc — Aurora OS
+export PS1="aurora@borealis:\\w$ "
+export EDITOR=nano
+alias ll="ls -la"
+alias ..="cd .."`},
+
+  '/home/aurora/Documents/notes.txt': {type:'file', content:
+`Meeting notes
+- Ship the window manager
+- Wire terminal to the filesystem
+- Make the aurora gradient just right`},
+
+  '/home/aurora/Documents/todo.md': {type:'file', content:
+`# TODO
+- [x] Build desktop
+- [x] Build terminal
+- [ ] Conquer the world`},
+
+  '/home/aurora/Projects/hello.py': {type:'file', content:
+`#!/usr/bin/env python3
+def main():
+    print("Hello from Aurora OS")
+
+if __name__ == "__main__":
+    main()`},
+
+  '/home/aurora/Projects/site.html': {type:'file', content:
+`<!DOCTYPE html>
+<html><head><title>Hi</title></head>
+<body><h1>Built inside Aurora OS</h1></body></html>`},
+
+  '/etc/hostname': {type:'file', content:'borealis'},
+  '/etc/os-release': {type:'file', content:
+`NAME="Aurora OS"
+VERSION="1.0 (Borealis)"
+ID=aurora
+PRETTY_NAME="Aurora OS 1.0 (Borealis)"
+ANSI_COLOR="0;36"
+HOME_URL="https://aurora.os"`},
+  '/etc/motd': {type:'file', content:'Welcome to Aurora OS — type `help` to get started.'},
+  '/var/log/system.log': {type:'file', content:
+`[boot] kernel: Aurora 1.0 borealis
+[boot] init: mounting / ... ok
+[boot] init: starting window manager ... ok
+[boot] net: lo up
+[boot] all systems nominal`},
+  '/bin/ls':{type:'file',content:'<binary>'},
+  '/bin/cat':{type:'file',content:'<binary>'},
+  '/bin/echo':{type:'file',content:'<binary>'},
+  '/bin/grep':{type:'file',content:'<binary>'},
+};
+
+/* fs helpers */
+function normPath(p, cwd){
+  if(!p) return cwd;
+  if(p[0]!=='/') p = (cwd==='/'?'':cwd)+'/'+p;
+  const parts = p.split('/').filter(Boolean), out=[];
+  for(const part of parts){
+    if(part==='.') continue;
+    if(part==='..'){ out.pop(); continue; }
+    out.push(part);
+  }
+  return '/'+out.join('/');
+}
+function fsGet(p){ return FS[p==='' ? '/' : p]; }
+function fsParent(p){ const i=p.lastIndexOf('/'); return i<=0?'/':p.slice(0,i); }
+function fsBase(p){ return p.slice(p.lastIndexOf('/')+1); }
+function fsMakeFile(p, content){
+  const par=fsParent(p), base=fsBase(p);
+  if(!FS[par]||FS[par].type!=='dir') return false;
+  FS[p]={type:'file',content:content||''};
+  if(!FS[par].children.includes(base)) FS[par].children.push(base);
+  return true;
+}
+function fsMakeDir(p){
+  const par=fsParent(p), base=fsBase(p);
+  if(!FS[par]||FS[par].type!=='dir') return false;
+  if(FS[p]) return false;
+  FS[p]={type:'dir',children:[]};
+  if(!FS[par].children.includes(base)) FS[par].children.push(base);
+  return true;
+}
+function fsRemove(p){
+  const node=FS[p]; if(!node) return false;
+  if(node.type==='dir'){ for(const c of [...node.children]) fsRemove(p+'/'+c); }
+  const par=fsParent(p), base=fsBase(p);
+  if(FS[par]) FS[par].children = FS[par].children.filter(c=>c!==base);
+  delete FS[p]; return true;
+}
+
+/* ---------- WINDOW MANAGER ---------- */
+let zTop = 100;
+let winId = 0;
+const wins = {};
+
+function makeWindow(opts){
+  const id = 'w'+(winId++);
+  const el = document.createElement('div');
+  el.className='win'; el.id=id;
+  const w = opts.w||640, h = opts.h||440;
+  const offset = (Object.keys(wins).length%6)*28;
+  el.style.width=w+'px'; el.style.height=h+'px';
+  el.style.left=(opts.x ?? (130+offset))+'px';
+  el.style.top =(opts.y ?? (70+offset))+'px';
+  el.style.zIndex=++zTop;
+  el.innerHTML=`
+    <div class="titlebar">
+      <div class="lights">
+        <button class="light c" title="Close"></button>
+        <button class="light m" title="Minimize"></button>
+        <button class="light x" title="Maximize"></button>
+      </div>
+      <div class="ttl"><span class="tico">${opts.icon||''}</span><span class="ttl-text">${opts.title}</span></div>
+      <div style="width:54px"></div>
+    </div>
+    <div class="winbody"></div>
+    <div class="resize"></div>`;
+  document.getElementById('desktop').appendChild(el);
+
+  const body = el.querySelector('.winbody');
+  const bar  = el.querySelector('.titlebar');
+  wins[id] = {el, body, opts, min:false, max:false, prev:null, taskBtn:null};
+
+  // focus
+  el.addEventListener('mousedown', ()=>focusWin(id));
+  // drag
+  let dragging=false, sx,sy,ox,oy;
+  bar.addEventListener('mousedown',e=>{
+    if(e.target.classList.contains('light')) return;
+    if(wins[id].max) return;
+    dragging=true; bar.classList.add('drag'); focusWin(id);
+    sx=e.clientX; sy=e.clientY; ox=el.offsetLeft; oy=el.offsetTop;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    el.style.left=Math.max(0,ox+e.clientX-sx)+'px';
+    el.style.top =Math.max(0,oy+e.clientY-sy)+'px';
+  });
+  window.addEventListener('mouseup',()=>{dragging=false;bar.classList.remove('drag')});
+  // resize
+  const rz=el.querySelector('.resize'); let rzing=false,rw,rh,rx,ry;
+  rz.addEventListener('mousedown',e=>{
+    rzing=true; rx=e.clientX; ry=e.clientY; rw=el.offsetWidth; rh=el.offsetHeight;
+    e.preventDefault(); e.stopPropagation();
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!rzing) return;
+    el.style.width =Math.max(320,rw+e.clientX-rx)+'px';
+    el.style.height=Math.max(180,rh+e.clientY-ry)+'px';
+  });
+  window.addEventListener('mouseup',()=>rzing=false);
+
+  // buttons
+  el.querySelector('.light.c').onclick=e=>{e.stopPropagation();closeWin(id)};
+  el.querySelector('.light.m').onclick=e=>{e.stopPropagation();minWin(id)};
+  el.querySelector('.light.x').onclick=e=>{e.stopPropagation();maxWin(id)};
+  bar.addEventListener('dblclick',()=>maxWin(id));
+
+  addTaskButton(id, opts);
+  focusWin(id);
+  if(opts.mount) opts.mount(body, id);
+  return id;
+}
+function focusWin(id){
+  const w=wins[id]; if(!w) return;
+  w.el.style.zIndex=++zTop;
+  Object.values(wins).forEach(x=>x.taskBtn&&x.taskBtn.classList.remove('active'));
+  if(w.taskBtn) w.taskBtn.classList.add('active');
+}
+function closeWin(id){
+  const w=wins[id]; if(!w) return;
+  w.el.style.animation='winIn .14s reverse';
+  setTimeout(()=>{ w.el.remove(); if(w.taskBtn)w.taskBtn.remove(); delete wins[id]; },120);
+}
+function minWin(id){
+  const w=wins[id]; if(!w) return;
+  w.min=!w.min; w.el.classList.toggle('min',w.min);
+  if(!w.min) focusWin(id);
+}
+function maxWin(id){
+  const w=wins[id]; if(!w) return;
+  if(!w.max){
+    w.prev={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};
+    w.el.style.left='0px'; w.el.style.top='0px';
+    w.el.style.width='100vw'; w.el.style.height='calc(100vh - 82px)';
+    w.el.classList.add('max'); w.max=true;
+  } else {
+    Object.assign(w.el.style,{left:w.prev.l,top:w.prev.t,width:w.prev.w,height:w.prev.h});
+    w.el.classList.remove('max'); w.max=false;
+  }
+  focusWin(id);
+}
+function addTaskButton(id, opts){
+  const tb=document.createElement('button');
+  tb.className='tb-btn active'; tb.title=opts.title;
+  tb.innerHTML=`<span class="glyph">${opts.icon}</span>`;
+  tb.onclick=()=>{ const w=wins[id]; if(w.min)minWin(id); else focusWin(id); };
+  document.getElementById('tbApps').appendChild(tb);
+  wins[id].taskBtn=tb;
+}
+
+/* ---------- TERMINAL APP ---------- */
+function launchTerminal(){
+  makeWindow({title:'Terminal — aurora@borealis', icon:ICON.terminal, w:660, h:430, x:120, y:70, mount:mountTerminal});
+}
+function mountTerminal(body){
+  body.innerHTML=`<div class="term"></div>`;
+  const term=body.querySelector('.term');
+  let cwd='/home/aurora';
+  const history=[]; let hIdx=0;
+  let pyMode=false;        // true while inside the interactive python REPL
+  let pyBuffer=[];         // accumulates lines for multi-line python blocks
+
+  const userPrompt=()=>`<span class="pmt"><span class="u">aurora</span>@<span class="p">borealis</span>:${cwd.replace('/home/aurora','~')}$ </span>`;
+  const pyPrompt=()=>`<span class="pmt" style="color:var(--aurora-3)">${pyBuffer.length?'... ':'>>> '}</span>`;
+
+  function print(html){ const d=document.createElement('div'); d.className='ln'; d.innerHTML=html; term.appendChild(d); scroll(); }
+  function scroll(){ term.scrollTop=term.scrollHeight; }
+  function newPrompt(){
+    const row=document.createElement('div'); row.className='ln term-input-row';
+    row.innerHTML=pyMode?pyPrompt():userPrompt();
+    const inp=document.createElement('input'); inp.className='term-input'; inp.spellcheck=false; inp.autocapitalize='off';
+    row.appendChild(inp); term.appendChild(row); inp.focus(); scroll();
+    inp.addEventListener('keydown',async e=>{
+      if(e.key==='Enter'){
+        const cmd=inp.value; inp.disabled=true;
+        // freeze line
+        row.removeChild(inp);
+        const frozen=document.createElement('span'); frozen.textContent=cmd; row.appendChild(frozen);
+        if(cmd.trim()){ history.push(cmd); hIdx=history.length; }
+        await run(cmd);          // may be async (e.g. real Python)
+        newPrompt();
+      } else if(e.key==='ArrowUp'){
+        e.preventDefault(); if(hIdx>0){hIdx--; inp.value=history[hIdx];}
+      } else if(e.key==='ArrowDown'){
+        e.preventDefault(); if(hIdx<history.length-1){hIdx++; inp.value=history[hIdx];}
+        else {hIdx=history.length; inp.value='';}
+      } else if(e.key==='Tab'){
+        e.preventDefault(); tabComplete(inp);
+      } else if(e.key==='l' && e.ctrlKey){
+        e.preventDefault(); term.innerHTML=''; newPrompt();
+      }
+    });
+  }
+
+  function tabComplete(inp){
+    const parts=inp.value.split(' '); const frag=parts[parts.length-1];
+    const base=frag.includes('/')?frag.slice(0,frag.lastIndexOf('/')+1):'';
+    const stub=frag.slice(base.length);
+    const dirPath=normPath(base||'.',cwd);
+    const node=fsGet(dirPath);
+    if(!node||node.type!=='dir') return;
+    const matches=node.children.filter(c=>c.startsWith(stub));
+    if(matches.length===1){
+      const full=base+matches[0]+(fsGet(normPath(base+matches[0],cwd))?.type==='dir'?'/':'');
+      parts[parts.length-1]=full; inp.value=parts.join(' ');
+    } else if(matches.length>1){
+      print(matches.map(m=>fsGet(normPath(base+m,cwd))?.type==='dir'?`<span class="dir">${m}/</span>`:m).join('  '));
+    }
+  }
+
+  async function run(raw){
+    // ---- interactive Python REPL mode ----
+    if(pyMode){
+      const line=raw;
+      if(line.trim()==='exit()' || line.trim()==='quit()'){
+        pyMode=false; pyBuffer=[];
+        print('<span class="dim">left python — back to shell</span>');
+        return;
+      }
+      // multi-line: keep buffering while the line opens a block or is a continuation
+      const opensBlock = /:\s*$/.test(line);
+      const isBlank = line.trim()==='';
+      if(opensBlock || (pyBuffer.length && !isBlank)){
+        pyBuffer.push(line);
+        return; // wait for more input (prompt becomes "... ")
+      }
+      const source = pyBuffer.length ? pyBuffer.concat(line).join('\n') : line;
+      pyBuffer=[];
+      await runPythonLine(source);
+      return;
+    }
+
+    const line=raw.trim(); if(!line) return;
+    // split on && first (chaining + short-circuit), THEN handle redirect per command
+    const chains=line.split('&&').map(s=>s.trim());
+    for(const segment of chains){
+      if(!segment) continue;
+
+      // ---- real Python commands (async) ----
+      const pyMatch = segment.match(/^python3?\b\s*(.*)$/);
+      if(pyMatch){
+        await cmd_python(pyMatch[1].trim());
+        continue;
+      }
+
+      // per-command redirection:  cmd ... > file
+      let cmdStr=segment, redirect=null, append=false;
+      const rmA=segment.match(/^(.*?)\s*>>\s*(\S+)\s*$/);
+      const rm =segment.match(/^(.*?)\s*>\s*(\S+)\s*$/);
+      if(rmA){ cmdStr=rmA[1].trim(); redirect=rmA[2]; append=true; }
+      else if(rm){ cmdStr=rm[1].trim(); redirect=rm[2]; }
+
+      const r=exec(cmdStr);
+      if(r.err){ print(`<span class="err">${r.out}</span>`); return; } // short-circuit on failure
+
+      if(redirect){
+        const path=normPath(redirect,cwd);
+        let content=r.out||'';
+        if(append){ const ex=fsGet(path); if(ex&&ex.type==='file') content=ex.content+(ex.content?'\n':'')+content; }
+        fsMakeFile(path, content);
+      } else if(!r.noprint && r.out!==''){
+        print(r.out);
+      }
+    }
+  }
+
+  // ---- Python execution helpers (real CPython via Pyodide) ----
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  async function ensurePy(){
+    const statusEl=document.createElement('div'); statusEl.className='ln dim';
+    statusEl.textContent='Booting CPython 3.12 (WebAssembly) — first run only…';
+    term.appendChild(statusEl); scroll();
+    try{
+      const py=await window.bootPython(msg=>{ statusEl.textContent=msg; scroll(); });
+      statusEl.remove();
+      return py;
+    }catch(err){
+      statusEl.className='ln err';
+      statusEl.textContent='python: '+err.message;
+      scroll();
+      return null;
+    }
+  }
+
+  // capture stdout/stderr from CPython and stream into the terminal
+  function wirePyOutput(py){
+    py.setStdout({ batched:(s)=>{ if(s!=='') print('<span style="white-space:pre-wrap">'+escHtml(s)+'</span>'); } });
+    py.setStderr({ batched:(s)=>{ if(s!=='') print('<span class="err" style="white-space:pre-wrap">'+escHtml(s)+'</span>'); } });
+  }
+
+  async function runPythonLine(source){
+    const py=window.__py.instance || await ensurePy();
+    if(!py) return;
+    wirePyOutput(py);
+    try{
+      const result = await py.runPythonAsync(source);
+      // The interactive interpreter echoes repr() of the last expression's value
+      // (and shows nothing for statements / None). Mirror that.
+      if(result!==undefined && result!==null){
+        let shown;
+        if(result && typeof result.toString==='function'){
+          // ask CPython itself for the repr, then release the proxy to avoid leaks
+          py.globals.set('__aurora_last__', result);
+          try{ shown = py.runPython('repr(__aurora_last__)'); }
+          catch(_){ shown = result.toString(); }
+          py.runPython('del __aurora_last__');
+        } else {
+          shown = String(result);
+        }
+        if(typeof result.destroy==='function') { try{ result.destroy(); }catch(_){} }
+        print('<span style="white-space:pre-wrap">'+escHtml(shown)+'</span>');
+      }
+    }catch(err){
+      printPyError(err);
+    }
+  }
+
+  function printPyError(err){
+    // Pyodide gives a full Python traceback in err.message
+    const msg=(err&&err.message)?err.message:String(err);
+    const lines=msg.split('\n').filter(l=>l.length);
+    // show the traceback from the Python part onward
+    let start=lines.findIndex(l=>l.includes('Traceback (most recent call last)'));
+    if(start<0) start=0;
+    print('<span class="err" style="white-space:pre-wrap">'+escHtml(lines.slice(start).join('\n'))+'</span>');
+  }
+
+  async function cmd_python(argstr){
+    // no args -> enter interactive REPL
+    if(!argstr){
+      const py=window.__py.instance || await ensurePy();
+      if(!py) return;
+      pyMode=true; pyBuffer=[];
+      const v=py.runPython('import sys; sys.version.split()[0]');
+      print('<span class="ok">Python '+v+'</span> <span class="dim">(real CPython via WebAssembly) — type exit() to leave</span>');
+      return;
+    }
+    // python -c "code"
+    const cMatch=argstr.match(/^-c\s+(.*)$/s);
+    if(cMatch){
+      let code=cMatch[1].trim();
+      if((code[0]==='"'&&code.slice(-1)==='"')||(code[0]==="'"&&code.slice(-1)==="'")) code=code.slice(1,-1);
+      const py=window.__py.instance || await ensurePy();
+      if(!py) return;
+      wirePyOutput(py);
+      try{ await py.runPythonAsync(code); }catch(err){ printPyError(err); }
+      return;
+    }
+    // python script.py  -> read from the virtual filesystem and execute
+    const path=normPath(argstr.split(/\s+/)[0],cwd);
+    const node=fsGet(path);
+    if(!node){ print('<span class="err">python: can\'t open file \''+escHtml(argstr)+'\': No such file or directory</span>'); return; }
+    if(node.type!=='file'){ print('<span class="err">python: \''+escHtml(argstr)+'\' is a directory</span>'); return; }
+    const py=window.__py.instance || await ensurePy();
+    if(!py) return;
+    wirePyOutput(py);
+    try{ await py.runPythonAsync(node.content); }catch(err){ printPyError(err); }
+  }
+
+  // returns {out, err, noprint}
+  function exec(c){
+    const args=c.match(/(?:[^\s"]+|"[^"]*")+/g)||[];
+    const cmd=args[0]; const rest=args.slice(1).map(a=>a.replace(/^"|"$/g,''));
+    const flags=rest.filter(a=>a.startsWith('-'));
+    const ops=rest.filter(a=>!a.startsWith('-'));
+    switch(cmd){
+      case 'help': return {out:CMD_HELP};
+      case 'ls': return cmd_ls(flags,ops);
+      case 'cd': return cmd_cd(ops);
+      case 'pwd': return {out:cwd};
+      case 'cat': return cmd_cat(ops);
+      case 'echo': return {out:rest.join(' ').replace(/^"|"$/g,'')};
+      case 'mkdir': return cmd_mkdir(ops);
+      case 'touch': return cmd_touch(ops);
+      case 'rm': return cmd_rm(flags,ops);
+      case 'mv': return cmd_mv(ops);
+      case 'cp': return cmd_cp(ops);
+      case 'clear': term.innerHTML=''; return {out:'',noprint:true};
+      case 'whoami': return {out:'aurora'};
+      case 'hostname': return {out:'borealis'};
+      case 'date': return {out:new Date().toString()};
+      case 'uname': return {out: flags.includes('-a')?'Aurora borealis 1.0 #1 SMP WebKernel x86_64 GNU/Browser':'Aurora'};
+      case 'tree': return cmd_tree(ops);
+      case 'grep': return cmd_grep(ops);
+      case 'wc': return cmd_wc(ops);
+      case 'head': return cmd_head(ops);
+      case 'find': return cmd_find(ops);
+      case 'nano': case 'edit': return cmd_edit(ops);
+      case 'open': return cmd_open(ops);
+      case 'neofetch': case 'fetch': return {out:NEOFETCH};
+      case 'cowsay': return {out:cowsay(rest.join(' ')||'moo')};
+      case 'fortune': return {out:FORTUNES[Math.floor(Math.random()*FORTUNES.length)]};
+      case 'history': return {out:history.map((h,i)=>`  ${i+1}  ${h}`).join('\n')};
+      case 'ps': return {out:PS_OUT};
+      case 'free': return {out:FREE_OUT};
+      case 'df': return {out:DF_OUT};
+      case 'man': return {out:ops[0]?`No manual entry for ${ops[0]} — try 'help'`:'What manual page do you want?'};
+      case 'exit': closeWin(Object.keys(wins).find(k=>wins[k].body===body)); return {out:'',noprint:true};
+      case 'sudo': return {out:`aurora is not in the sudoers file. This incident will be reported.`};
+      case 'apt': case 'apt-get': return {out:`Reading package lists... Done\nE: This is a simulated system. No packages to install.`};
+      case '': return {out:''};
+      default: return {out:`${cmd}: command not found`, err:true};
+    }
+  }
+
+  /* command implementations */
+  function cmd_ls(flags,ops){
+    const target=ops[0]?normPath(ops[0],cwd):cwd;
+    const node=fsGet(target);
+    if(!node) return {out:`ls: cannot access '${ops[0]}': No such file or directory`,err:true};
+    if(node.type==='file') return {out:fsBase(target)};
+    const all=flags.includes('-a')||flags.includes('-la')||flags.includes('-al');
+    let items=[...node.children];
+    if(all) items=['.','..',...items];
+    items.sort();
+    const long=flags.includes('-l')||flags.includes('-la')||flags.includes('-al');
+    if(long){
+      const rows=items.map(name=>{
+        if(name==='.'||name==='..') return `drwxr-xr-x  aurora  4096  ${name}`;
+        const child=fsGet(normPath(target+'/'+name,'/'));
+        const isDir=child?.type==='dir';
+        const size=isDir?4096:(child?.content?.length||0);
+        const perm=isDir?'drwxr-xr-x':'-rw-r--r--';
+        const cls=isDir?'dir':(['/bin'].some(b=>target.startsWith(b))?'exe':'');
+        return `${perm}  aurora  ${String(size).padStart(5)}  <span class="${cls}">${name}${isDir?'/':''}</span>`;
+      });
+      return {out:`total ${items.length}\n`+rows.join('\n')};
+    }
+    return {out:items.map(name=>{
+      if(name==='.'||name==='..') return `<span class="dir">${name}</span>`;
+      const child=fsGet(normPath(target+'/'+name,'/'));
+      return child?.type==='dir'?`<span class="dir">${name}/</span>`:name;
+    }).join('   ')};
+  }
+  function cmd_cd(ops){
+    if(!ops[0]||ops[0]==='~') { cwd='/home/aurora'; return {out:''}; }
+    const target=normPath(ops[0],cwd);
+    const node=fsGet(target);
+    if(!node) return {out:`cd: ${ops[0]}: No such file or directory`,err:true};
+    if(node.type!=='dir') return {out:`cd: ${ops[0]}: Not a directory`,err:true};
+    cwd=target; return {out:''};
+  }
+  function cmd_cat(ops){
+    if(!ops[0]) return {out:'cat: missing operand',err:true};
+    let out=[];
+    for(const o of ops){
+      const node=fsGet(normPath(o,cwd));
+      if(!node) return {out:`cat: ${o}: No such file or directory`,err:true};
+      if(node.type==='dir') return {out:`cat: ${o}: Is a directory`,err:true};
+      out.push(esc(node.content));
+    }
+    return {out:out.join('\n')};
+  }
+  function cmd_mkdir(ops){
+    if(!ops[0]) return {out:'mkdir: missing operand',err:true};
+    for(const o of ops){ if(!fsMakeDir(normPath(o,cwd))) return {out:`mkdir: cannot create directory '${o}'`,err:true}; }
+    return {out:''};
+  }
+  function cmd_touch(ops){
+    if(!ops[0]) return {out:'touch: missing operand',err:true};
+    for(const o of ops){ const p=normPath(o,cwd); if(!fsGet(p)) fsMakeFile(p,''); }
+    return {out:''};
+  }
+  function cmd_rm(flags,ops){
+    if(!ops[0]) return {out:'rm: missing operand',err:true};
+    const rec=flags.includes('-r')||flags.includes('-rf')||flags.includes('-fr');
+    for(const o of ops){
+      const p=normPath(o,cwd); const node=fsGet(p);
+      if(!node) return {out:`rm: cannot remove '${o}': No such file or directory`,err:true};
+      if(node.type==='dir'&&!rec) return {out:`rm: cannot remove '${o}': Is a directory`,err:true};
+      if(p==='/'||p==='/home'||p==='/home/aurora') return {out:`rm: refusing to remove '${o}'`,err:true};
+      fsRemove(p);
+    }
+    return {out:''};
+  }
+  function cmd_mv(ops){
+    if(ops.length<2) return {out:'mv: missing destination',err:true};
+    const src=normPath(ops[0],cwd), node=fsGet(src);
+    if(!node) return {out:`mv: cannot stat '${ops[0]}'`,err:true};
+    let dst=normPath(ops[1],cwd);
+    if(fsGet(dst)?.type==='dir') dst=dst+'/'+fsBase(src);
+    if(node.type==='file') fsMakeFile(dst,node.content); else fsMakeDir(dst);
+    fsRemove(src); return {out:''};
+  }
+  function cmd_cp(ops){
+    if(ops.length<2) return {out:'cp: missing destination',err:true};
+    const src=normPath(ops[0],cwd), node=fsGet(src);
+    if(!node||node.type!=='file') return {out:`cp: cannot copy '${ops[0]}'`,err:true};
+    let dst=normPath(ops[1],cwd);
+    if(fsGet(dst)?.type==='dir') dst=dst+'/'+fsBase(src);
+    fsMakeFile(dst,node.content); return {out:''};
+  }
+  function cmd_tree(ops){
+    const root=ops[0]?normPath(ops[0],cwd):cwd;
+    if(!fsGet(root)) return {out:`tree: ${ops[0]}: No such file or directory`,err:true};
+    let lines=[`<span class="dir">${root}</span>`]; let count={d:0,f:0};
+    function walk(p,pre){
+      const node=fsGet(p); if(node.type!=='dir') return;
+      const kids=[...node.children].sort();
+      kids.forEach((k,i)=>{
+        const last=i===kids.length-1;
+        const cp=normPath(p+'/'+k,'/'); const cn=fsGet(cp);
+        const branch=last?'└── ':'├── ';
+        if(cn.type==='dir'){count.d++; lines.push(pre+branch+`<span class="dir">${k}</span>`); walk(cp,pre+(last?'    ':'│   '));}
+        else {count.f++; lines.push(pre+branch+k);}
+      });
+    }
+    walk(root,''); lines.push(``,`${count.d} directories, ${count.f} files`);
+    return {out:lines.join('\n')};
+  }
+  function cmd_grep(ops){
+    if(ops.length<2) return {out:'usage: grep PATTERN FILE',err:true};
+    const pat=ops[0], node=fsGet(normPath(ops[1],cwd));
+    if(!node||node.type!=='file') return {out:`grep: ${ops[1]}: No such file`,err:true};
+    const hits=node.content.split('\n').filter(l=>l.includes(pat))
+      .map(l=>esc(l).replace(new RegExp(pat,'g'),`<span class="ok">${esc(pat)}</span>`));
+    return {out:hits.join('\n')};
+  }
+  function cmd_wc(ops){
+    const node=fsGet(normPath(ops[0]||'',cwd));
+    if(!node||node.type!=='file') return {out:`wc: ${ops[0]}: No such file`,err:true};
+    const c=node.content; const lines=c.split('\n').length, words=c.split(/\s+/).filter(Boolean).length;
+    return {out:`  ${lines}  ${words}  ${c.length} ${ops[0]}`};
+  }
+  function cmd_head(ops){
+    const node=fsGet(normPath(ops[0]||'',cwd));
+    if(!node||node.type!=='file') return {out:`head: ${ops[0]}: No such file`,err:true};
+    return {out:esc(node.content.split('\n').slice(0,10).join('\n'))};
+  }
+  function cmd_find(ops){
+    const root=ops[0]?normPath(ops[0],cwd):cwd; let res=[];
+    function walk(p){ const n=fsGet(p); if(!n)return; res.push(p);
+      if(n.type==='dir') n.children.forEach(c=>walk(normPath(p+'/'+c,'/'))); }
+    walk(root); return {out:res.join('\n')};
+  }
+  function cmd_edit(ops){
+    if(!ops[0]) return {out:'usage: nano FILE',err:true};
+    const p=normPath(ops[0],cwd);
+    if(!fsGet(p)) fsMakeFile(p,'');
+    launchEditor(p);
+    return {out:`<span class="dim">opening ${ops[0]} in editor…</span>`};
+  }
+  function cmd_open(ops){
+    if(!ops[0]) return {out:'usage: open FILE',err:true};
+    const p=normPath(ops[0],cwd); const n=fsGet(p);
+    if(!n) return {out:`open: ${ops[0]}: No such file`,err:true};
+    if(n.type==='dir'){ launchFiles(p); return {out:`<span class="dim">opening ${ops[0]} in Files…</span>`}; }
+    launchEditor(p); return {out:`<span class="dim">opening ${ops[0]}…</span>`};
+  }
+
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // boot banner
+  print(NEOFETCH);
+  print(`<span class="dim">Type <span class="ok">help</span> for commands. Run <span class="ok">python</span> for a real CPython REPL.</span>`);
+  print('');
+  newPrompt();
+  term.addEventListener('click',()=>{ const ins=term.querySelectorAll('.term-input'); if(ins.length)ins[ins.length-1].focus(); });
+}
+
+/* ---------- FILES APP ---------- */
+function launchFiles(start){
+  makeWindow({title:'Files', icon:ICON.files, w:620, h:420, mount:(b)=>mountFiles(b,start||'/home/aurora')});
+}
+function mountFiles(body, start){
+  let cur=start;
+  body.innerHTML=`
+    <div class="fm">
+      <div class="fm-side">
+        <div class="grp">Places</div>
+        <div class="it" data-p="/home/aurora"><i class="si">${ICON.home}</i>Home</div>
+        <div class="it" data-p="/home/aurora/Documents"><i class="si">${ICON.docs}</i>Documents</div>
+        <div class="it" data-p="/home/aurora/Projects"><i class="si">${ICON.briefcase}</i>Projects</div>
+        <div class="grp">System</div>
+        <div class="it" data-p="/"><i class="si">${ICON.disk}</i>Root</div>
+        <div class="it" data-p="/etc"><i class="si">${ICON.gear}</i>etc</div>
+        <div class="it" data-p="/var/log"><i class="si">${ICON.list}</i>Logs</div>
+      </div>
+      <div class="fm-main">
+        <div class="fm-bar">
+          <span class="nav" data-act="up"><i class="ni">${svg('<path d="M5 12l7-7 7 7M12 5v15"/>')}</i>Up</span>
+          <span class="nav" data-act="home"><i class="ni">${ICON.home}</i>Home</span>
+          <span class="path"></span>
+        </div>
+        <div class="fm-grid"></div>
+      </div>
+    </div>`;
+  const grid=body.querySelector('.fm-grid');
+  const pathEl=body.querySelector('.path');
+  function iconFor(name,isDir){
+    if(isDir) return ICON.folder;
+    if(name.endsWith('.txt')||name.endsWith('.md')) return ICON.fileText;
+    if(name.endsWith('.py')) return ICON.fileCode;
+    if(name.endsWith('.html')) return ICON.fileWeb;
+    if(name.startsWith('.')) return ICON.fileCfg;
+    if(name.endsWith('.log')) return ICON.fileLog;
+    return ICON.fileGeneric;
+  }
+  function render(){
+    const node=fsGet(cur);
+    pathEl.textContent=cur;
+    body.querySelectorAll('.fm-side .it').forEach(it=>it.classList.toggle('on',it.dataset.p===cur));
+    grid.innerHTML='';
+    if(!node||node.type!=='dir') return;
+    [...node.children].sort((a,b)=>{
+      const da=fsGet(normPath(cur+'/'+a,'/'))?.type==='dir';
+      const db=fsGet(normPath(cur+'/'+b,'/'))?.type==='dir';
+      if(da!==db) return da?-1:1; return a.localeCompare(b);
+    }).forEach(name=>{
+      const p=normPath(cur+'/'+name,'/'); const n=fsGet(p); const isDir=n?.type==='dir';
+      const it=document.createElement('div'); it.className='fm-item';
+      it.innerHTML=`<div class="ic ${isDir?'isdir':''}">${iconFor(name,isDir)}</div><div class="nm">${name}</div>`;
+      it.ondblclick=()=>{ if(isDir){cur=p;render();} else launchEditor(p); };
+      grid.appendChild(it);
+    });
+  }
+  body.querySelectorAll('.fm-side .it').forEach(it=>it.onclick=()=>{cur=it.dataset.p;render();});
+  body.querySelector('[data-act=up]').onclick=()=>{cur=fsParent(cur);render();};
+  body.querySelector('[data-act=home]').onclick=()=>{cur='/home/aurora';render();};
+  render();
+}
+
+/* ---------- TEXT EDITOR APP ---------- */
+function launchEditor(path){
+  makeWindow({title:'Editor — '+fsBase(path), icon:ICON.editor, w:600, h:440, mount:(b)=>mountEditor(b,path)});
+}
+function mountEditor(body, path){
+  const node=fsGet(path);
+  const content=node&&node.type==='file'?node.content:'';
+  body.innerHTML=`
+    <div class="editor">
+      <div class="ed-bar">
+        <span class="fname">${path}</span>
+        <button data-act="save">Save</button>
+        <button data-act="saveclose">Save &amp; Close</button>
+      </div>
+      <textarea class="ed-area" spellcheck="false"></textarea>
+    </div>`;
+  const ta=body.querySelector('.ed-area'); ta.value=content;
+  const fname=body.querySelector('.fname');
+  let dirty=false;
+  ta.addEventListener('input',()=>{ if(!dirty){dirty=true; fname.textContent=path+' •';} });
+  function save(){ fsMakeFile(path,ta.value); dirty=false; fname.textContent=path+'  ✓ saved'; setTimeout(()=>fname.textContent=path,1200); }
+  body.querySelector('[data-act=save]').onclick=save;
+  body.querySelector('[data-act=saveclose]').onclick=()=>{ save(); setTimeout(()=>{ const id=Object.keys(wins).find(k=>wins[k].body===body); closeWin(id); },300); };
+  ta.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();save();} });
+  setTimeout(()=>ta.focus(),50);
+}
+
+/* ---------- SYSTEM MONITOR APP ---------- */
+function launchMonitor(){
+  makeWindow({title:'System Monitor', icon:ICON.monitor, w:480, h:440, mount:mountMonitor});
+}
+function mountMonitor(body){
+  body.innerHTML=`<div class="mon">
+    <div class="row">
+      <div class="lbl"><span>CPU</span><span class="cpuv">—</span></div>
+      <div class="bar"><div class="fill cpuf" style="background:linear-gradient(90deg,var(--aurora-1),var(--aurora-2))"></div></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><span>Memory</span><span class="memv">—</span></div>
+      <div class="bar"><div class="fill memf" style="background:linear-gradient(90deg,var(--aurora-2),var(--aurora-3))"></div></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><span>Disk / (in-memory FS)</span><span class="dskv">—</span></div>
+      <div class="bar"><div class="fill dskf" style="background:linear-gradient(90deg,var(--green),var(--aurora-1))"></div></div>
+    </div>
+    <table>
+      <thead><tr><th>PID</th><th>Process</th><th>CPU%</th><th>MEM</th></tr></thead>
+      <tbody class="proc"></tbody>
+    </table>
+  </div>`;
+  const procs=[
+    [1,'init',0.0,'2.1 MB'],[142,'window-manager',2.4,'31 MB'],
+    [156,'terminal',1.1,'18 MB'],[201,'files',0.6,'14 MB'],
+    [233,'aurora-shell',3.2,'42 MB'],[290,'compositor',4.8,'56 MB'],
+  ];
+  const tb=body.querySelector('.proc');
+  tb.innerHTML=procs.map(p=>`<tr><td>${p[0]}</td><td class="n">${p[1]}</td><td>${p[2].toFixed(1)}</td><td>${p[3]}</td></tr>`).join('');
+  let alive=true;
+  (function tick(){
+    if(!body.isConnected){alive=false;return;}
+    const cpu=18+Math.random()*40, mem=42+Math.random()*15;
+    const files=Object.keys(FS).filter(k=>FS[k].type==='file').length;
+    const dsk=Math.min(95, 12+files*1.4);
+    body.querySelector('.cpuf').style.width=cpu+'%'; body.querySelector('.cpuv').textContent=cpu.toFixed(1)+'%';
+    body.querySelector('.memf').style.width=mem+'%'; body.querySelector('.memv').textContent=mem.toFixed(0)+'% · '+(mem*0.08).toFixed(1)+' GB / 8 GB';
+    body.querySelector('.dskf').style.width=dsk+'%'; body.querySelector('.dskv').textContent=dsk.toFixed(0)+'% · '+files+' files';
+    if(alive) setTimeout(tick,1400);
+  })();
+}
+
+/* ---------- ABOUT APP ---------- */
+function launchAbout(){
+  makeWindow({title:'About Aurora OS', icon:ICON.about, w:520, h:500, x:800, y:90, mount:mountAbout});
+}
+function mountAbout(body){
+  body.innerHTML=`<div class="about">
+    <div class="about-hero">
+      <div class="about-logo">Aurora OS</div>
+      <h1>A browser tab that<br>runs <span class="grad">real CPython</span>.</h1>
+      <p>No server. No backend. One HTML file with a window manager, a shell,
+      an in-memory filesystem — and a terminal whose <b>python</b> command is
+      CPython 3.12 compiled to WebAssembly, executing your code for real.</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-cell"><div class="k">Python</div><div class="v">CPython 3.12 · WASM</div></div>
+      <div class="about-cell"><div class="k">Runtime</div><div class="v">Pyodide (real interpreter)</div></div>
+      <div class="about-cell"><div class="k">Shell</div><div class="v">aurora-sh · 30+ commands</div></div>
+      <div class="about-cell"><div class="k">Filesystem</div><div class="v">In-memory, persistent per session</div></div>
+    </div>
+    <div class="about-cmds">
+      <h3>Try real Python in the terminal</h3>
+      <div>
+        <code>python</code><code>python -c "print(2**100)"</code>
+        <code>import math; math.factorial(20)</code>
+        <code>[x*x for x in range(10)]</code>
+      </div>
+      <h3 style="margin-top:18px">Shell</h3>
+      <div>
+        <code>ls -la</code><code>tree /</code><code>cat /etc/os-release</code>
+        <code>echo hi &gt; f.txt</code><code>cowsay hello</code>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- STATIC STRINGS ---------- */
+const CMD_HELP=
+`<span class="ok">Aurora OS — available commands</span>
+
+<span class="dir">python</span>    <span class="exe">real CPython 3.12 (WebAssembly)</span> — not simulated
+            <span class="dim">python</span>            interactive REPL
+            <span class="dim">python script.py</span>  run a file from the filesystem
+            <span class="dim">python -c "code"</span>  run a one-liner
+<span class="dir">files</span>     ls  cd  pwd  cat  echo  mkdir  touch  rm  mv  cp  tree  find
+<span class="dir">text</span>      grep  wc  head  nano  edit  open
+<span class="dir">system</span>    whoami  hostname  date  uname  ps  free  df  history  clear
+<span class="dir">fun</span>       neofetch  cowsay  fortune
+
+Tips:
+  • <span class="exe">Tab</span> completes paths, <span class="exe">↑/↓</span> walk history, <span class="exe">Ctrl+L</span> clears
+  • try real Python:  <span class="ok">python -c "print(sum(range(101)))"</span>
+  • redirect output:  <span class="ok">echo hello &gt; file.txt</span>
+  • chain commands:   <span class="ok">mkdir x && cd x && pwd</span>
+  • everything you create persists across all apps`;
+
+const NEOFETCH=[
+  '<span class="dir">       .--.        </span> <span class="ok">aurora</span>@<span class="ok">borealis</span>',
+  '<span class="dir">      |o_o |       </span> \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500',
+  '<span class="dir">      |:_/ |       </span> <span class="exe">OS</span>      Aurora OS 1.0 Borealis',
+  '<span class="dir">     //   \\\\ \\\\      </span> <span class="exe">Kernel</span>  WebKernel x86_64',
+  '<span class="dir">    (|     | )     </span> <span class="exe">Shell</span>   aurora-sh',
+  '<span class="dir">   /\'\\\\_   _/_\\\\     </span> <span class="exe">WM</span>      Aurora Compositor',
+  '<span class="dir">   \\\\___)=(___/     </span> <span class="exe">Uptime</span>  just now',
+  '                    <span class="exe">Term</span>    browser-tty'
+].join('\n');
+
+const PS_OUT=
+`  PID TTY          TIME CMD
+    1 ?        00:00:01 init
+  142 tty1     00:00:04 window-manager
+  156 pts/0    00:00:02 aurora-sh
+  233 ?        00:00:06 compositor
+  290 pts/0    00:00:00 ps`;
+const FREE_OUT=
+`              total        used        free
+Mem:           8192        3640        4552
+Swap:          2048           0        2048`;
+const DF_OUT=
+`Filesystem     Size  Used Avail Use% Mounted on
+auroraFS        16G  2.1G   14G  14% /
+tmpfs          512M   12M  500M   3% /tmp`;
+const FORTUNES=[
+  'The best way to predict the future is to implement it.',
+  'A user interface is like a joke. If you have to explain it, it’s not that good.',
+  'There are 10 kinds of people: those who understand binary and those who don’t.',
+  'Simplicity is the ultimate sophistication.',
+  'It works on my machine. — every developer, ever.',
+  'rm -rf / is not a backup strategy.',
+];
+function cowsay(text){
+  const top=' '+'_'.repeat(text.length+2);
+  const bot=' '+'-'.repeat(text.length+2);
+  return [
+    top,
+    '< '+text+' >',
+    bot,
+    '        \\   ^__^',
+    '         \\  (oo)\\_______',
+    '            (__)\\       )\\/\\',
+    '                ||----w |',
+    '                ||     ||'
+  ].join('\n');
+}
+
+/* ---------- APP REGISTRY / LAUNCHERS ---------- */
+const APPS=[
+  {name:'Terminal', icon:ICON.terminal, run:launchTerminal},
+  {name:'Files',    icon:ICON.files,    run:()=>launchFiles()},
+  {name:'Editor',   icon:ICON.editor,   run:()=>launchEditor('/home/aurora/welcome.md')},
+  {name:'Monitor',  icon:ICON.monitor,  run:launchMonitor},
+  {name:'About',    icon:ICON.about,    run:launchAbout},
+];
+
+// desktop icons
+const iconBox=document.getElementById('icons');
+APPS.forEach(a=>{
+  const d=document.createElement('div'); d.className='dicon';
+  d.innerHTML=`<div class="glyph">${a.icon}</div><span>${a.name}</span>`;
+  d.ondblclick=a.run; iconBox.appendChild(d);
+});
+
+// start menu
+const smGrid=document.getElementById('smGrid');
+APPS.forEach(a=>{
+  const it=document.createElement('div'); it.className='sm-it';
+  it.innerHTML=`<div class="g">${a.icon}</div><span>${a.name}</span>`;
+  it.onclick=()=>{ a.run(); toggleStart(false); };
+  smGrid.appendChild(it);
+});
+const startMenu=document.getElementById('startmenu');
+function toggleStart(force){
+  const open=force!==undefined?force:!startMenu.classList.contains('open');
+  startMenu.classList.toggle('open',open);
+  document.getElementById('startBtn').classList.toggle('active',open);
+}
+document.getElementById('startBtn').onclick=e=>{e.stopPropagation();toggleStart();};
+document.addEventListener('click',e=>{
+  if(!startMenu.contains(e.target)&&e.target.id!=='startBtn') toggleStart(false);
+});
+
+// clock
+function tickClock(){
+  const d=new Date();
+  const t=d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const dt=d.toLocaleDateString([], {month:'short',day:'numeric'});
+  document.getElementById('clock').innerHTML=`<b>${t}</b>${dt}`;
+}
+tickClock(); setInterval(tickClock,1000);
+
+// fill the start button with its SVG glyph
+document.querySelector('.startglyph').innerHTML=ICON.start;
+
+// boot: open terminal + about, positioned so they don't overlap
+window.addEventListener('load',()=>{
+  launchTerminal();
+  setTimeout(()=>{
+    launchAbout();
+    // re-focus the terminal so the user lands on a ready prompt
+    setTimeout(()=>{
+      const termWin=Object.keys(wins).find(k=>wins[k].opts.title.includes('Terminal'));
+      if(termWin){
+        focusWin(termWin);
+        const inp=wins[termWin].body.querySelector('.term-input');
+        if(inp) inp.focus();
+      }
+    },120);
+  },350);
+});
+</script>
+</body>
+</html>

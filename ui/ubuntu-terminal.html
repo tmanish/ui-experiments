@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>user@ubuntu: ~</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --term-bg:#300A24;        /* Ubuntu terminal aubergine */
+    --hdr:#2b2b2b; --hdr-focus:#333333; --line:#1b1b1b;
+    --orange:#E95420; --txt:#ffffff; --dim:#bfbfbf;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:'Ubuntu',system-ui,sans-serif;
+    background:
+      radial-gradient(125% 95% at 72% 16%, rgba(233,84,32,.22), transparent 46%),
+      radial-gradient(135% 115% at 26% 90%, rgba(119,33,111,.50), transparent 55%),
+      radial-gradient(95% 85% at 50% 50%, #4a0f38, #350a28 46%, #1f0416 100%);
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing:antialiased; user-select:none;
+  }
+  /* faint Ubuntu watermark on the desktop behind the terminal */
+  #bg-logo{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(48vw,520px);opacity:.06;pointer-events:none}
+
+  /* ---- GNOME Terminal window ---- */
+  .term-win{
+    width:min(92vw,860px); height:min(88vh,560px);
+    display:flex; flex-direction:column; border-radius:11px; overflow:hidden;
+    box-shadow:0 28px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.45);
+    border:1px solid var(--line);
+  }
+  .hbar{
+    height:44px; flex:0 0 44px; display:flex; align-items:center; gap:9px; padding:0 8px 0 14px;
+    background:var(--hdr-focus); border-bottom:1px solid var(--line); cursor:grab; position:relative;
+  }
+  .hbar.drag{cursor:grabbing}
+  .hbar .ico{width:18px;height:18px;flex:0 0 18px}
+  .hbar .title{
+    position:absolute; left:0; right:0; text-align:center; font-size:14px; font-weight:500; color:#fff;
+    pointer-events:none; padding:0 120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .hbar .spacer{flex:1}
+  .hbar .menu-btn{width:30px;height:30px;border:none;background:transparent;color:#cfcfcf;border-radius:7px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;z-index:2}
+  .hbar .menu-btn:hover{background:#444}
+  .hbar .menu-btn svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none}
+  .ctrls{display:flex;gap:9px;align-items:center;z-index:2}
+  .cbtn{width:26px;height:26px;border-radius:50%;border:none;background:#3a3a3a;color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center}
+  .cbtn:hover{background:#4a4a4a}
+  .cbtn.close:hover{background:var(--orange)}
+  .cbtn svg{width:11px;height:11px;stroke:#fff;stroke-width:1.9;fill:none}
+
+  /* the terminal surface */
+  .term{
+    flex:1; background:var(--term-bg); color:#fff; font-family:'Ubuntu Mono',monospace;
+    font-size:15px; line-height:1.4; padding:8px 12px 12px; overflow-y:auto; cursor:text;
+  }
+  .term .line{white-space:pre-wrap;word-break:break-word}
+  /* Tango palette (Ubuntu gnome-terminal default) */
+  .g{color:#8ae234;font-weight:700}   /* user@host: bold green */
+  .b{color:#729fcf;font-weight:700}   /* path: bold blue */
+  .wht{color:#ffffff}
+  .grn{color:#4e9a06}.bgrn{color:#8ae234}
+  .red{color:#ef2929}.dred{color:#cc0000}
+  .yel{color:#fce94f}.dyel{color:#c4a000}
+  .blu{color:#729fcf}.dblu{color:#3465a4}
+  .mag{color:#ad7fa8}.cyn{color:#34e2e2}.gry{color:#888a85}
+  .org{color:#E95420}
+  .dir{color:#729fcf;font-weight:700}
+  .exe{color:#8ae234;font-weight:700}
+  .img{color:#ad7fa8;font-weight:700}
+  .arc{color:#ef2929;font-weight:700}
+  .ubu{color:#E95420;line-height:1.08}
+  .term-il{display:flex;align-items:baseline}
+  .term-in{flex:1;min-width:2px;background:transparent;border:none;outline:none;color:#fff;
+    font-family:inherit;font-size:inherit;caret-color:#fff}
+
+  .term::-webkit-scrollbar{width:12px}
+  .term::-webkit-scrollbar-track{background:transparent}
+  .term::-webkit-scrollbar-thumb{background:#5a3a50;border-radius:6px;border:3px solid var(--term-bg);background-clip:padding-box}
+  .term::-webkit-scrollbar-thumb:hover{background:#6e4a62;background-clip:padding-box}
+
+  .hint{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:rgba(255,255,255,.4);font-size:12px;pointer-events:none}
+  .hint kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 6px;font-size:11px}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg id="bg-logo" viewBox="0 0 100 100" fill="none">
+  <circle cx="50" cy="50" r="46" stroke="#fff" stroke-width="5"/>
+  <g fill="#fff"><circle cx="50" cy="13" r="9"/><circle cx="82" cy="68" r="9"/><circle cx="18" cy="68" r="9"/></g>
+  <circle cx="50" cy="50" r="13" stroke="#fff" stroke-width="5"/>
+</svg>
+
+<div class="term-win" id="win">
+  <div class="hbar" id="hbar">
+    <svg class="ico" viewBox="0 0 48 48"><rect x="3" y="6" width="42" height="36" rx="6" fill="#380a2a"/><rect x="3" y="6" width="42" height="9" rx="6" fill="#4d1138"/><path d="M11 24l7 5-7 5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 34h11" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <div class="title" id="title">user@ubuntu: ~</div>
+    <div class="spacer"></div>
+    <button class="menu-btn" id="menu-btn" title="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="ctrls">
+      <button class="cbtn min" title="Minimize"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+      <button class="cbtn max" title="Maximize"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg></button>
+      <button class="cbtn close" title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+    </div>
+  </div>
+  <div class="term" id="term"></div>
+</div>
+
+<div class="hint">Try <kbd>neofetch</kbd> · <kbd>sudo apt install cowsay</kbd> · <kbd>htop</kbd> · <kbd>man ls</kbd> &nbsp;·&nbsp; <kbd>Tab</kbd> completes, <kbd>↑</kbd>/<kbd>↓</kbd> history</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Ubuntu 22.04 — GNOME Terminal (bash), single file
+   ===================================================================== */
+
+/* ---------------- Virtual filesystem ---------------- */
+const HOME='/home/user';
+const FS={
+ '/':{t:'d',c:['bin','boot','dev','etc','home','lib','media','opt','proc','root','run','sbin','srv','tmp','usr','var']},
+ '/home':{t:'d',c:['user']},
+ [HOME]:{t:'d',c:['Desktop','Documents','Downloads','Music','Pictures','Videos','Projects','snap','.bashrc','.profile','README.md']},
+ [HOME+'/Desktop']:{t:'d',c:[]},
+ [HOME+'/Documents']:{t:'d',c:['notes.txt','resume.md','budget.csv']},
+ [HOME+'/Documents/notes.txt']:{t:'f',data:'Ubuntu terminal notes\n=====================\n\n- This is a faithful bash shell on the iconic aubergine background.\n- Files you create with touch/mkdir/echo are real (in memory).\n- Try: neofetch, sudo apt install cowsay, htop, man ls, tree\n'},
+ [HOME+'/Documents/resume.md']:{t:'f',data:'# Resume\n\nName:     User\nRole:     Software Developer\nLocation: ~/  (Ubuntu 22.04 LTS)\nSkills:   bash, python3, git\n'},
+ [HOME+'/Documents/budget.csv']:{t:'f',data:'month,income,spend\nJan,5200,3100\nFeb,5200,2950\nMar,5400,3300\nApr,5400,3050\n'},
+ [HOME+'/Downloads']:{t:'d',c:['ubuntu-22.04.3-desktop-amd64.iso']},
+ [HOME+'/Downloads/ubuntu-22.04.3-desktop-amd64.iso']:{t:'f',data:'(disk image)',size:4915011584},
+ [HOME+'/Music']:{t:'d',c:[]},
+ [HOME+'/Pictures']:{t:'d',c:['wallpaper.png','screenshot.png']},
+ [HOME+'/Pictures/wallpaper.png']:{t:'f',data:'(image)'},
+ [HOME+'/Pictures/screenshot.png']:{t:'f',data:'(image)'},
+ [HOME+'/Videos']:{t:'d',c:[]},
+ [HOME+'/Projects']:{t:'d',c:['hello.py','kernel.rs','app']},
+ [HOME+'/Projects/hello.py']:{t:'f',data:'#!/usr/bin/env python3\nprint("Hello from Ubuntu")\n'},
+ [HOME+'/Projects/kernel.rs']:{t:'f',data:'fn main() {\n    println!("booting...");\n}\n'},
+ [HOME+'/Projects/app']:{t:'d',c:['index.js']},
+ [HOME+'/Projects/app/index.js']:{t:'f',data:'console.log("ubuntu node app");\n'},
+ [HOME+'/snap']:{t:'d',c:[]},
+ [HOME+'/.bashrc']:{t:'f',data:'# ~/.bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -alF"\nalias la="ls -A"\nalias l="ls -CF"\n'},
+ [HOME+'/.profile']:{t:'f',data:'# ~/.profile\n'},
+ [HOME+'/README.md']:{t:'f',data:'Welcome to Ubuntu 22.04 LTS (Jammy Jellyfish).\nOpen secret: type `neofetch`.\n'},
+ '/etc':{t:'d',c:['os-release','hostname','hosts','passwd','lsb-release']},
+ '/etc/os-release':{t:'f',data:'PRETTY_NAME="Ubuntu 22.04.3 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nVERSION="22.04.3 LTS (Jammy Jellyfish)"\nVERSION_CODENAME=jammy\nID=ubuntu\nID_LIKE=debian\nHOME_URL="https://www.ubuntu.com/"\nUBUNTU_CODENAME=jammy\n'},
+ '/etc/lsb-release':{t:'f',data:'DISTRIB_ID=Ubuntu\nDISTRIB_RELEASE=22.04\nDISTRIB_CODENAME=jammy\nDISTRIB_DESCRIPTION="Ubuntu 22.04.3 LTS"\n'},
+ '/etc/hostname':{t:'f',data:'ubuntu\n'},
+ '/etc/hosts':{t:'f',data:'127.0.0.1\tlocalhost\n127.0.1.1\tubuntu\n'},
+ '/etc/passwd':{t:'f',data:'root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000:User:/home/user:/bin/bash\n'},
+ '/root':{t:'d',c:[]},'/tmp':{t:'d',c:[]},
+ '/var':{t:'d',c:['log']},'/var/log':{t:'d',c:['syslog']},
+ '/var/log/syslog':{t:'f',data:'systemd[1]: Started Ubuntu desktop session.\n'},
+ '/usr':{t:'d',c:['bin','lib','share']},'/usr/bin':{t:'d',c:[]},'/usr/lib':{t:'d',c:[]},'/usr/share':{t:'d',c:[]},
+ '/bin':{t:'d',c:[]},'/boot':{t:'d',c:[]},'/dev':{t:'d',c:[]},'/lib':{t:'d',c:[]},'/media':{t:'d',c:[]},'/opt':{t:'d',c:[]},
+ '/proc':{t:'d',c:['cpuinfo','meminfo','version']},
+ '/proc/cpuinfo':{t:'f',data:'processor\t: 0\nvendor_id\t: GenuineIntel\nmodel name\t: Intel(R) Core(TM) i7-1165G7 @ 2.80GHz\ncpu MHz\t\t: 2803.000\ncache size\t: 12288 KB\nprocessor\t: 1\nmodel name\t: Intel(R) Core(TM) i7-1165G7 @ 2.80GHz\n'},
+ '/proc/meminfo':{t:'f',data:'MemTotal:        8039244 kB\nMemFree:         3127880 kB\nMemAvailable:    5204120 kB\n'},
+ '/proc/version':{t:'f',data:'Linux version 6.5.0-14-generic (buildd@lcy02) (gcc 11.4.0) #14~22.04.1-Ubuntu SMP\n'},
+ '/run':{t:'d',c:[]},'/sbin':{t:'d',c:[]},'/srv':{t:'d',c:[]},
+};
+const PKGS=new Set(['bash','coreutils','python3','nodejs','git','vim','curl','wget','nano','grep','sed','gawk','tree','htop']);
+
+function norm(p){const s=[];for(const part of (p||'').split('/')){if(part===''||part==='.')continue;if(part==='..')s.pop();else s.push(part);}return '/'+s.join('/');}
+function rsv(cwd,a){if(!a)return cwd;if(a==='~'||a.startsWith('~/'))a=HOME+a.slice(1);if(a.startsWith('/'))return norm(a);return norm(cwd+'/'+a);}
+function ex(p){return FS[p]!==undefined;}
+function isd(p){return FS[p]&&FS[p].t==='d';}
+function par(p){if(p==='/')return '/';const i=p.lastIndexOf('/');return i===0?'/':p.slice(0,i);}
+function base(p){if(p==='/')return '/';return p.slice(p.lastIndexOf('/')+1);}
+function cp(d,n){return d==='/'?'/'+n:d+'/'+n;}
+function lsArr(p){if(!isd(p))return[];return FS[p].c.slice().sort((a,b)=>{const A=isd(cp(p,a)),B=isd(cp(p,b));if(A!==B)return A?-1:1;return a.localeCompare(b);});}
+function addc(d,n){if(FS[d]&&!FS[d].c.includes(n))FS[d].c.push(n);}
+function rmc(d,n){if(FS[d])FS[d].c=FS[d].c.filter(x=>x!==n);}
+function del(p){if(isd(p))for(const c of FS[p].c.slice())del(cp(p,c));delete FS[p];}
+function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function strip(h){const d=document.createElement('div');d.innerHTML=h;return d.textContent;}
+function tok(s){return (s.match(/"[^"]*"|'[^']*'|\S+/g)||[]);}
+
+const BOOT_T=Date.now();
+function upStr(){const s=Math.floor((Date.now()-BOOT_T)/1000)+ 7140;const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return (h?h+' hour'+(h>1?'s':'')+', ':'')+m+' min'+(m!==1?'s':'');}
+
+/* ---------------- Ubuntu neofetch logo ---------------- */
+const UBU=[
+"            .-/+oossssoo+/-.",
+"        \`:+ssssssssssssssssss+:\`",
+"      -+ssssssssssssssssssyyssss+-",
+"    .ossssssssssssssssssdMMMNysssso.",
+"   /ssssssssssshdmmNNmmyNMMMMhssssss/",
+"  +ssssssssshmydMMMMMMMNddddyssssssss+",
+" /sssssssshNMMMyhhyyyyhmNMMMNhssssssss/",
+".ssssssssdMMMNhsssssssssshNMMMdssssssss.",
+"+sssshhhyNMMNyssssssssssssyNMMMysssssss+",
+"ossyNMMMNyMMhsssssssssssssshmmmhssssssso",
+"ossyNMMMNyMMhsssssssssssssshmmmhssssssso",
+"+sssshhhyNMMNyssssssssssssyNMMMysssssss+",
+".ssssssssdMMMNhsssssssssshNMMMdssssssss.",
+" /sssssssshNMMMyhhyyyyhdNMMMNhssssssss/",
+"  +sssssssssdmydMMMMMMMMddddyssssssss+",
+"   /ssssssssssshdmNNNNmyNMMMMhssssss/",
+"    .ossssssssssssssssssdMMMNysssso.",
+"      -+sssssssssssssssssyyyssss+-",
+"        \`:+ssssssssssssssssss+:\`",
+"            .-/+oossssoo+/-."];
+
+/* =====================================================================
+   Terminal
+   ===================================================================== */
+const term=document.getElementById('term');
+const titleEl=document.getElementById('title');
+let cwd=HOME;
+let busy=false;
+const hist=[];let hi=0;
+let activeIn=null;
+
+const promptHTML=()=>`<span class="g">user@ubuntu</span><span class="wht">:</span><span class="b">${cwd===HOME?'~':cwd.replace(HOME,'~')}</span><span class="wht">$</span> `;
+function setTitle(){titleEl.textContent=`user@ubuntu: ${cwd===HOME?'~':cwd.replace(HOME,'~')}`;}
+
+function print(html,cls){const d=document.createElement('div');d.className='line'+(cls?' '+cls:'');d.innerHTML=html;term.appendChild(d);term.scrollTop=term.scrollHeight;return d;}
+function clearT(){term.innerHTML='';}
+
+function newInput(){
+ if(busy)return;
+ const line=document.createElement('div');line.className='term-il';
+ line.innerHTML=`<span>${promptHTML()}</span>`;
+ const inp=document.createElement('input');inp.className='term-in';inp.spellcheck=false;inp.autocapitalize='off';inp.autocomplete='off';inp.setAttribute('autocorrect','off');
+ line.appendChild(inp);term.appendChild(line);activeIn=inp;inp.focus();term.scrollTop=term.scrollHeight;
+ requestAnimationFrame(()=>{if(activeIn===inp&&!inp.disabled)inp.focus();});
+ inp.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+   e.preventDefault();const cmd=inp.value;inp.disabled=true;activeIn=null;
+   line.innerHTML=`<span>${promptHTML()}</span><span class="wht">${esc(cmd)}</span>`;
+   if(cmd.trim()){hist.push(cmd);hi=hist.length;}
+   runLine(cmd);
+  }else if(e.key==='ArrowUp'){e.preventDefault();if(hi>0){hi--;inp.value=hist[hi]||'';moveCaretEnd(inp);}}
+  else if(e.key==='ArrowDown'){e.preventDefault();if(hi<hist.length-1){hi++;inp.value=hist[hi]||'';}else{hi=hist.length;inp.value='';}moveCaretEnd(inp);}
+  else if(e.key==='Tab'){e.preventDefault();tabComplete(inp);}
+  else if(e.ctrlKey&&(e.key==='l'||e.key==='L')){e.preventDefault();clearT();finish();}
+  else if(e.ctrlKey&&(e.key==='c'||e.key==='C')){e.preventDefault();line.innerHTML=`<span>${promptHTML()}</span><span class="wht">${esc(inp.value)}</span>^C`;inp.disabled=true;activeIn=null;finish();}
+  else if(e.ctrlKey&&(e.key==='d'||e.key==='D')){if(inp.value==='')return;}
+ });
+}
+function moveCaretEnd(inp){setTimeout(()=>{try{inp.selectionStart=inp.selectionEnd=inp.value.length;}catch(e){}},0);}
+function finish(){if(!busy)newInput();}
+term.addEventListener('mousedown',()=>{if(activeIn&&!activeIn.disabled)setTimeout(()=>activeIn.focus(),0);});
+
+function tabComplete(inp){
+ const v=inp.value;const parts=v.split(' ');const frag=parts[parts.length-1];
+ const sl=frag.lastIndexOf('/');const dir=sl>=0?rsv(cwd,frag.slice(0,sl+1)):cwd;const stub=sl>=0?frag.slice(sl+1):frag;
+ if(!isd(dir))return;const m=FS[dir].c.filter(c=>c.startsWith(stub));
+ if(m.length===1){parts[parts.length-1]=(sl>=0?frag.slice(0,sl+1):'')+m[0]+(isd(cp(dir,m[0]))?'/':'');inp.value=parts.join(' ');}
+ else if(m.length>1){print(`<span>${promptHTML()}</span>${esc(v)}`);print(m.map(x=>isd(cp(dir,x))?`<span class="dir">${x}/</span>`:x).join('  '));}
+}
+
+const ASYNC=Symbol('async');
+function runLine(raw){
+ const line=raw.trim();if(!line){finish();return;}
+ let redir=null,append=false,cl=line;
+ const rr=line.match(/^(.*?)(>>|>)\s*(\S+)\s*$/);
+ if(rr){cl=rr[1].trim();append=rr[2]==='>>';redir=rsv(cwd,rr[3]);}
+ let pipeGrep=null;const pg=cl.match(/^(.*?)\|\s*grep\s+(.+)$/);
+ if(pg){cl=pg[1].trim();pipeGrep=pg[2].replace(/^["']|["']$/g,'');}
+ const args=tok(cl);let cmd=args.shift();
+ let sudo=false;if(cmd==='sudo'){sudo=true;cmd=args.shift();if(cmd==='su'){print('<span class="gry">root shell not available in this demo.</span>');finish();return;}}
+ let out;
+ try{out=dispatch(cmd,args,sudo);}
+ catch(err){out=`<span class="red">bash: internal error: ${esc(err&&err.message||err)}</span>`;}
+ if(out===ASYNC)return;
+ if(pipeGrep&&typeof out==='string'){
+  const lines=strip(out).split('\n').filter(l=>l.includes(pipeGrep));
+  out=lines.map(l=>esc(l).replace(new RegExp(esc(pipeGrep).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),`<span class="red">${esc(pipeGrep)}</span>`)).join('\n');
+ }
+ if(redir&&out!==undefined){writeTo(redir,strip(out),append);}
+ else if(out)print(out);
+ finish();
+}
+function writeTo(p,content,append){const d=par(p);if(!isd(d))return;if(ex(p)&&isd(p))return;if(!ex(p))addc(d,base(p));FS[p]={t:'f',data:append&&FS[p]?((FS[p].data||'')+content+'\n'):(content+'\n')};}
+
+/* ---------------- command dispatch ---------------- */
+function dispatch(cmd,a,sudo){
+ switch(cmd){
+  case undefined: case '': return '';
+  case 'help': return helpText();
+  case 'clear': clearT(); return '';
+  case 'pwd': return cwd;
+  case 'whoami': return sudo?'root':'user';
+  case 'id': return 'uid=1000(user) gid=1000(user) groups=1000(user),4(adm),27(sudo),100(users)';
+  case 'hostname': return 'ubuntu';
+  case 'uname': return a.includes('-a')?'Linux ubuntu 6.5.0-14-generic #14~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC x86_64 x86_64 x86_64 GNU/Linux':(a.includes('-r')?'6.5.0-14-generic':(a.includes('-m')?'x86_64':'Linux'));
+  case 'lsb_release': return 'Distributor ID:\tUbuntu\nDescription:\tUbuntu 22.04.3 LTS\nRelease:\t22.04\nCodename:\tjammy';
+  case 'date': return new Date().toString();
+  case 'cal': return calText();
+  case 'uptime': return ` ${new Date().toLocaleTimeString('en-GB')} up ${upStr()},  1 user,  load average: 0.42, 0.31, 0.28`;
+  case 'echo': return echoCmd(a);
+  case 'printf': return esc(a.join(' ').replace(/^["']|["']$/g,'').replace(/\\n/g,'\n').replace(/\\t/g,'\t'));
+  case 'cat': return catCmd(a);
+  case 'ls': case 'dir': return lsCmd(a);
+  case 'll': return lsCmd(['-alF',...a]);
+  case 'cd': {const r=cdCmd(a[0]);setTitle();return r||'';}
+  case 'mkdir': return mkdirCmd(a);
+  case 'touch': return touchCmd(a);
+  case 'rm': return rmCmd(a,sudo);
+  case 'rmdir': return rmCmd(['-r',...a],sudo);
+  case 'cp': return cpCmd(a);
+  case 'mv': return mvCmd(a);
+  case 'tree': return treeCmd(a[0]?rsv(cwd,a[0]):cwd);
+  case 'grep': return grepCmd(a);
+  case 'find': return findCmd(a);
+  case 'head': return htCmd(a,'head');
+  case 'tail': return htCmd(a,'tail');
+  case 'wc': return wcCmd(a);
+  case 'sort': return sortCmd(a);
+  case 'uniq': return uniqCmd(a);
+  case 'which': return whichCmd(a);
+  case 'whereis': return (a[0]||'')+': /usr/bin/'+(a[0]||'');
+  case 'env': case 'printenv': return 'SHELL=/bin/bash\nHOME=/home/user\nUSER=user\nLOGNAME=user\nLANG=en_US.UTF-8\nPWD='+cwd+'\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nDESKTOP_SESSION=ubuntu\nXDG_CURRENT_DESKTOP=ubuntu:GNOME\nTERM=xterm-256color';
+  case 'export': case 'alias': case 'unalias': case 'set': case 'chmod': case 'chown': case 'umask': return '';
+  case 'history': return hist.map((h,i)=>`${String(i+1).padStart(5)}  ${h}`).join('\n');
+  case 'man': return manCmd(a);
+  case 'neofetch': case 'screenfetch': return neofetch();
+  case 'lscpu': return lscpu();
+  case 'lsblk': return lsblk();
+  case 'lsusb': return 'Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub\nBus 001 Device 003: ID 5986:1185 Acer, Inc Integrated Camera\nBus 001 Device 002: ID 8087:0026 Intel Corp. AX201 Bluetooth\nBus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub';
+  case 'df': return dfCmd(a);
+  case 'du': return du(a);
+  case 'free': return freeCmd(a);
+  case 'ps': return psCmd(a);
+  case 'top': case 'htop': topCmd(cmd); return ASYNC;
+  case 'kill': case 'killall': return '';
+  case 'cowsay': return cowsay(a.join(' ')||'Moo');
+  case 'fortune': return fortune();
+  case 'figlet': case 'banner': case 'toilet': return figlet(a.join(' ')||'UBUNTU');
+  case 'yes': return (a.join(' ')||'y')+'\n'+(a.join(' ')||'y')+'\n'+(a.join(' ')||'y')+'\n<span class="gry">^C (yes would repeat forever)</span>';
+  case 'sl': return slTrain();
+  case 'apt': case 'apt-get': aptCmd(a,sudo); return ASYNC;
+  case 'dpkg': return a.includes('-l')?'||/ Name           Version       Architecture Description\n+++-==============-=============-============-=================================\nii  bash           5.1-6ubuntu1  amd64        GNU Bourne Again SHell\nii  coreutils      8.32-4.1ubuntu1 amd64      GNU core utilities':'';
+  case 'snap': return a[0]==='list'?'Name    Version   Rev   Tracking       Publisher   Notes\nbare    1.0       5     latest/stable  canonical✓  base\ncore22  20240111  1122  latest/stable  canonical✓  base\nfirefox 122.0     3779  latest/stable  mozilla✓    -\nsnapd   2.61      20671 latest/stable  canonical✓  snapd':'snap: try `snap list`';
+  case 'systemctl': return systemctl(a);
+  case 'service': return ' * '+(a[0]||'service')+' is running';
+  case 'python3': case 'python': return pyCmd(a);
+  case 'pip': case 'pip3': return a[0]==='list'?'Package    Version\n---------- -------\npip        22.0.2\nsetuptools 59.6.0':'pip: try `pip list`';
+  case 'node': return a[0]==='-e'?nodeEval(a.slice(1).join(' ')):(a.includes('--version')||a.includes('-v')?'v18.19.0':'Welcome to Node.js v18.19.0.\nType ".help" for more information. (REPL not supported here)');
+  case 'npm': return a[0]==='-v'||a.includes('--version')?'9.2.0':'npm: try `npm -v`';
+  case 'git': return gitCmd(a);
+  case 'make': return 'make: *** No targets specified and no makefile found.  Stop.';
+  case 'gcc': case 'g++': case 'cc': return a.length?'':'gcc: fatal error: no input files\ncompilation terminated.';
+  case 'vim': case 'vi': case 'nano': case 'emacs': case 'gedit': return editorMsg(cmd,a);
+  case 'less': case 'more': return catCmd(a);
+  case 'open': case 'xdg-open': return `<span class="gry">(would open ${esc(a[0]||'')} in a GUI app)</span>`;
+  case 'ping': pingCmd(a); return ASYNC;
+  case 'curl': case 'wget': return netCmd(cmd,a);
+  case 'ifconfig': case 'ip': return ipCmd(a);
+  case 'ssh': case 'scp': return `<span class="gry">${cmd}: no network in this sandboxed shell.</span>`;
+  case 'sudo': return 'usage: sudo command';
+  case 'su': return 'root shell not available here.';
+  case 'exit': case 'logout': print('<span class="gry">logout</span>'); return '';
+  case 'reboot': case 'poweroff': case 'shutdown': case 'halt': print('<span class="org">The system is going down NOW!</span>'); busy=true; setTimeout(()=>location.reload(),900); return '';
+  case 'apt-cache': return 'apt-cache: try `apt list`';
+  case 'fastfetch': return neofetch();
+  default:
+   if(PKGS.has(cmd))return `<span class="gry">${esc(cmd)}: nothing to do</span>`;
+   return `<span class="red">${esc(cmd)}: command not found</span>\n<span class="gry">Try 'help', or 'sudo apt install ${esc(cmd)}'</span>`;
+ }
+}
+
+/* ---------------- implementations ---------------- */
+function cdCmd(arg){if(!arg||arg==='~'){cwd=HOME;return;}if(arg==='-'){return;}const t=rsv(cwd,arg);if(!ex(t))return `<span class="red">bash: cd: ${esc(arg)}: No such file or directory</span>`;if(!isd(t))return `<span class="red">bash: cd: ${esc(arg)}: Not a directory</span>`;cwd=t;}
+
+function lsCmd(a){
+ const flags=a.filter(x=>x.startsWith('-')).join('');
+ const long=/[la]/.test(flags)&&flags.includes('l');
+ const all=flags.includes('a')||flags.includes('A');
+ const tgt=a.filter(x=>!x.startsWith('-'))[0];
+ const dir=tgt?rsv(cwd,tgt):cwd;
+ if(!ex(dir))return `<span class="red">ls: cannot access '${esc(tgt)}': No such file or directory</span>`;
+ if(!isd(dir))return decorate(dir,base(dir));
+ let it=FS[dir].c.slice();if(!all)it=it.filter(c=>!c.startsWith('.'));it.sort();
+ if(all)it=['.','..'].concat(it);
+ if(!it.length)return '';
+ if(long){
+  const rows=it.map(c=>{
+   if(c==='.'||c==='..')return `drwxr-xr-x  2 user user  4096 Jan 15 09:00 <span class="dir">${c}</span>`;
+   const p=cp(dir,c);const d=isd(p);
+   const perm=d?'drwxr-xr-x':(/\.(sh|py|rs)$/.test(c)?'-rwxr-xr-x':'-rw-r--r--');
+   const sz=d?4096:(FS[p].size||(FS[p].data?FS[p].data.length:0));
+   return `${perm}  ${d?2:1} user user ${String(sz).padStart(8)} Jan 15 09:00 ${decorate(p,c)}`;
+  });
+  return `total ${Math.max(4,it.length*4)}\n`+rows.join('\n');
+ }
+ return it.map(c=>(c==='.'||c==='..')?`<span class="dir">${c}</span>`:decorate(cp(dir,c),c)).join('  ');
+}
+function decorate(p,name){if(isd(p))return `<span class="dir">${name}</span>`;if(/\.(sh|py|rs|js|out)$/.test(name))return `<span class="exe">${name}</span>`;if(/\.(png|jpg|jpeg|gif|svg|webp|bmp)$/.test(name))return `<span class="img">${name}</span>`;if(/\.(iso|img|zip|tar|gz|deb)$/.test(name))return `<span class="arc">${name}</span>`;return name;}
+
+function catCmd(a){const f=a.filter(x=>!x.startsWith('-'));if(!f.length)return '';return f.map(x=>{const p=rsv(cwd,x);if(!ex(p))return `<span class="red">cat: ${esc(x)}: No such file or directory</span>`;if(isd(p))return `<span class="red">cat: ${esc(x)}: Is a directory</span>`;return esc(FS[p].data||'');}).join('\n');}
+
+function echoCmd(a){let s=a.join(' ');const dashE=a[0]==='-e';if(dashE){s=a.slice(1).join(' ');}s=s.replace(/^["']|["']$/g,'').replace(/\$USER/g,'user').replace(/\$HOME/g,HOME).replace(/\$HOSTNAME/g,'ubuntu').replace(/\$SHELL/g,'/bin/bash').replace(/\$PWD/g,cwd).replace(/\$\(whoami\)/g,'user').replace(/\$\(hostname\)/g,'ubuntu').replace(/\$\?/g,'0');if(dashE)s=s.replace(/\\n/g,'\n').replace(/\\t/g,'\t');return esc(s);}
+
+function mkdirCmd(a){const ns=a.filter(x=>!x.startsWith('-'));if(!ns.length)return `<span class="red">mkdir: missing operand</span>`;let e='';for(const n of ns){const p=rsv(cwd,n);if(ex(p)){e+=`<span class="red">mkdir: cannot create directory '${esc(n)}': File exists</span>\n`;continue;}if(!isd(par(p))){e+=`<span class="red">mkdir: cannot create directory '${esc(n)}': No such file or directory</span>\n`;continue;}FS[p]={t:'d',c:[]};addc(par(p),base(p));}return e.trim();}
+
+function touchCmd(a){const ns=a.filter(x=>!x.startsWith('-'));if(!ns.length)return `<span class="red">touch: missing file operand</span>`;for(const n of ns){const p=rsv(cwd,n);if(!isd(par(p)))return `<span class="red">touch: cannot touch '${esc(n)}': No such file or directory</span>`;if(!ex(p)){FS[p]={t:'f',data:''};addc(par(p),base(p));}}return '';}
+
+function rmCmd(a,sudo){const flags=a.filter(x=>x.startsWith('-')).join('');const rec=flags.includes('r')||flags.includes('R');const ns=a.filter(x=>!x.startsWith('-'));if(!ns.length)return `<span class="red">rm: missing operand</span>`;let e='';for(const n of ns){const p=rsv(cwd,n);if(p==='/'){return `<span class="red">rm: it is dangerous to operate recursively on '/'</span>\n<span class="red">rm: use --no-preserve-root to override this failsafe</span>`;}if(!ex(p)){e+=`<span class="red">rm: cannot remove '${esc(n)}': No such file or directory</span>\n`;continue;}if(['/','/home',HOME,'/etc','/usr','/bin'].includes(p)){e+=`<span class="red">rm: cannot remove '${esc(n)}': Permission denied</span>\n`;continue;}if(isd(p)&&!rec){e+=`<span class="red">rm: cannot remove '${esc(n)}': Is a directory</span>\n`;continue;}del(p);rmc(par(p),base(p));}return e.trim();}
+
+function cpCmd(a){const x=a.filter(v=>!v.startsWith('-'));if(x.length<2)return `<span class="red">cp: missing destination file operand after '${esc(x[0]||'')}'</span>`;const s=rsv(cwd,x[0]);let d=rsv(cwd,x[1]);if(!ex(s))return `<span class="red">cp: cannot stat '${esc(x[0])}': No such file or directory</span>`;if(isd(s))return `<span class="red">cp: -r not specified; omitting directory '${esc(x[0])}'</span>`;if(isd(d))d=cp(d,base(s));FS[d]={t:'f',data:FS[s].data};addc(par(d),base(d));return '';}
+
+function mvCmd(a){const x=a.filter(v=>!v.startsWith('-'));if(x.length<2)return `<span class="red">mv: missing destination file operand after '${esc(x[0]||'')}'</span>`;const s=rsv(cwd,x[0]);let d=rsv(cwd,x[1]);if(!ex(s))return `<span class="red">mv: cannot stat '${esc(x[0])}': No such file or directory</span>`;if(isd(d))d=cp(d,base(s));FS[d]=FS[s];if(isd(s))rekey(s,d);delete FS[s];rmc(par(s),base(s));addc(par(d),base(d));return '';}
+function rekey(o,n){if(!isd(n))return;for(const c of FS[n].c){const oo=cp(o,c),nn=cp(n,c);FS[nn]=FS[oo];delete FS[oo];if(isd(nn))rekey(oo,nn);}}
+
+function treeCmd(root){if(!ex(root))return `<span class="red">${esc(root)}  [error opening dir]</span>`;let dirs=0,files=0;function walk(p,pre){let s='';const ch=lsArr(p);ch.forEach((c,i)=>{const last=i===ch.length-1;const pp=cp(p,c);const d=isd(pp);if(d)dirs++;else files++;s+=pre+(last?'└── ':'├── ')+decorate(pp,c)+'\n';if(d)s+=walk(pp,pre+(last?'    ':'│   '));});return s;}return `<span class="dir">${root===HOME?'.':root}</span>\n`+walk(root,'')+`\n${dirs} ${dirs===1?'directory':'directories'}, ${files} ${files===1?'file':'files'}`;}
+
+function grepCmd(a){const flags=a.filter(x=>x.startsWith('-')).join('');const x=a.filter(v=>!v.startsWith('-'));const ic=flags.includes('i');if(x.length<2)return `<span class="red">Usage: grep [OPTION]... PATTERN [FILE]...</span>`;const pat=x[0];const p=rsv(cwd,x[1]);if(!ex(p))return `<span class="red">grep: ${esc(x[1])}: No such file or directory</span>`;if(isd(p))return `<span class="red">grep: ${esc(x[1])}: Is a directory</span>`;const lines=(FS[p].data||'').split('\n');const re=new RegExp('('+pat.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')',ic?'gi':'g');const out=lines.filter(l=>ic?l.toLowerCase().includes(pat.toLowerCase()):l.includes(pat));return out.map(l=>esc(l).replace(re,'<span class="red">$1</span>')).join('\n');}
+
+function findCmd(a){const root=a[0]&&!a[0].startsWith('-')?rsv(cwd,a[0]):cwd;const ni=a.indexOf('-name');const pat=ni>=0&&a[ni+1]?a[ni+1].replace(/['"]/g,''):null;if(!ex(root))return `<span class="red">find: '${esc(a[0])}': No such file or directory</span>`;const res=[];(function w(p){res.push(p);if(isd(p))for(const c of FS[p].c)w(cp(p,c));})(root);let l=res;if(pat){const rx=new RegExp('^'+pat.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*').replace(/\?/g,'.')+'$');l=res.filter(p=>rx.test(base(p)));}return l.map(p=>isd(p)?`<span class="dir">${p}</span>`:p).join('\n');}
+
+function htCmd(a,which){const x=a.filter(v=>!v.startsWith('-'));let n=10;const ni=a.indexOf('-n');if(ni>=0&&a[ni+1])n=parseInt(a[ni+1])||10;const sh=a.find(v=>/^-\d+$/.test(v));if(sh)n=parseInt(sh.slice(1));const p=rsv(cwd,x[0]||'');if(!ex(p))return `<span class="red">${which}: cannot open '${esc(x[0]||'')}' for reading: No such file or directory</span>`;if(isd(p))return `<span class="red">${which}: error reading '${esc(x[0])}': Is a directory</span>`;let ln=(FS[p].data||'').split('\n');if(ln.length&&ln[ln.length-1]==='')ln=ln.slice(0,-1);return esc((which==='head'?ln.slice(0,n):ln.slice(-n)).join('\n'));}
+
+function wcCmd(a){const flags=a.filter(x=>x.startsWith('-')).join('');const x=a.filter(v=>!v.startsWith('-'));if(!x.length)return `<span class="red">wc: missing file operand</span>`;const p=rsv(cwd,x[0]);if(!ex(p))return `<span class="red">wc: ${esc(x[0])}: No such file or directory</span>`;if(isd(p))return `<span class="red">wc: ${esc(x[0])}: Is a directory</span>`;const c=FS[p].data||'';const lines=c?c.split('\n').length-(c.endsWith('\n')?1:0):0;const words=c.trim()?c.trim().split(/\s+/).length:0;if(flags.includes('l'))return `${lines} ${x[0]}`;if(flags.includes('w'))return `${words} ${x[0]}`;if(flags.includes('c'))return `${c.length} ${x[0]}`;return `${String(lines).padStart(7)} ${String(words).padStart(7)} ${String(c.length).padStart(7)} ${x[0]}`;}
+
+function sortCmd(a){const flags=a.filter(x=>x.startsWith('-')).join('');const x=a.filter(v=>!v.startsWith('-'));const p=rsv(cwd,x[0]||'');if(!ex(p)||isd(p))return `<span class="red">sort: cannot read: ${esc(x[0]||'')}: No such file or directory</span>`;let ln=(FS[p].data||'').split('\n').filter(l=>l!=='');if(flags.includes('n'))ln.sort((a,b)=>parseFloat(a)-parseFloat(b));else ln.sort();if(flags.includes('r'))ln.reverse();return esc(ln.join('\n'));}
+
+function uniqCmd(a){const x=a.filter(v=>!v.startsWith('-'));const p=rsv(cwd,x[0]||'');if(!ex(p)||isd(p))return `<span class="red">uniq: ${esc(x[0]||'')}: No such file or directory</span>`;const ln=(FS[p].data||'').split('\n');const o=[];for(const l of ln){if(o[o.length-1]!==l)o.push(l);}if(o[o.length-1]==='')o.pop();return esc(o.join('\n'));}
+
+function whichCmd(a){const known={ls:'/usr/bin/ls',bash:'/usr/bin/bash',sh:'/usr/bin/sh',python3:'/usr/bin/python3',python:'/usr/bin/python3',node:'/usr/bin/node',git:'/usr/bin/git',vim:'/usr/bin/vim',nano:'/usr/bin/nano',grep:'/usr/bin/grep',cat:'/usr/bin/cat',curl:'/usr/bin/curl',htop:'/usr/bin/htop',apt:'/usr/bin/apt'};return a.map(c=>known[c]||'').filter(Boolean).join('\n');}
+
+function dfCmd(a){const h=a.includes('-h')||a.includes('-H');return h?'Filesystem      Size  Used Avail Use% Mounted on\ntmpfs           785M  2.0M  783M   1% /run\n/dev/sda2        98G   42G   51G  46% /\ntmpfs           3.9G  102M  3.8G   3% /dev/shm\ntmpfs           5.0M  4.0K  5.0M   1% /run/lock\n/dev/sda1       511M  6.1M  505M   2% /boot/efi\ntmpfs           785M  124K  785M   1% /run/user/1000':'Filesystem     1K-blocks     Used Available Use% Mounted on\ntmpfs             803924     2048    801876   1% /run\n/dev/sda2      102687672 43512936  53914004  46% /\n/dev/sda1         523248     6244    517004   2% /boot/efi';}
+
+function du(a){return '4.0K\t./Desktop\n12K\t./Documents\n4.9G\t./Downloads\n8.0K\t./Projects/app\n16K\t./Projects\n4.0K\t./Music\n12K\t./Pictures\n4.9G\t.';}
+
+function freeCmd(a){const h=a.includes('-h')||a.includes('-m')||a.includes('-g');if(a.includes('-g'))return '               total        used        free      shared  buff/cache   available\nMem:               7           2           3           0           2           4\nSwap:              1           0           1';return h?'               total        used        free      shared  buff/cache   available\nMem:           7.7Gi       2.6Gi       3.0Gi       312Mi       2.1Gi       4.5Gi\nSwap:          2.0Gi          0B       2.0Gi':'               total        used        free      shared  buff/cache   available\nMem:         8039244     2731288     3127880      319488     2180076     4712044\nSwap:        2097148           0     2097148';}
+
+function psCmd(a){const j=a.join('');if(j.includes('aux')||j.includes('ef'))return 'USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\nroot           1  0.0  0.3 167140 11920 ?        Ss   09:00   0:01 /sbin/init\nroot         994  3.4  0.5 458120 44120 tty1     Ss+  09:00   0:12 /usr/lib/xorg/Xorg\nuser        1842  6.2  1.8 892140 148320 ?       Sl   09:01   0:48 /usr/bin/gnome-shell\nuser        2103  2.1  0.9 712044  74180 ?       Sl   09:01   0:13 nautilus\nuser        2477  0.0  0.4 230112  35240 pts/0    Ss   09:02   0:00 bash\nuser        3012  0.0  0.2  10120  3920 pts/0     R+   09:05   0:00 ps aux';return '    PID TTY          TIME CMD\n   2477 pts/0    00:00:00 bash\n   3012 pts/0    00:00:00 ps';}
+
+function lscpu(){return 'Architecture:            x86_64\n  CPU op-mode(s):        32-bit, 64-bit\n  Address sizes:         39 bits physical, 48 bits virtual\n  Byte Order:            Little Endian\nCPU(s):                  8\n  On-line CPU(s) list:   0-7\nVendor ID:               GenuineIntel\n  Model name:            Intel(R) Core(TM) i7-1165G7 @ 2.80GHz\n    CPU family:          6\n    Model:               140\n    Thread(s) per core:  2\n    Core(s) per socket:  4\n    Socket(s):           1\n    CPU max MHz:         4700.0000\n    CPU min MHz:         400.0000\nVirtualization features:\n  Virtualization:        VT-x\nCaches (sum of all):\n  L1d:                   192 KiB (4 instances)\n  L1i:                   128 KiB (4 instances)\n  L2:                    5 MiB (4 instances)\n  L3:                    12 MiB (1 instance)';}
+
+function lsblk(){return 'NAME   MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS\nsda      8:0    0   100G  0 disk\n├─sda1   8:1    0   512M  0 part /boot/efi\n└─sda2   8:2    0  99.5G  0 part /\nsr0     11:0    1  1024M  0 rom';}
+
+function ipCmd(a){return '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN\n    inet 127.0.0.1/8 scope host lo\n2: enp0s31f6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP\n    inet 192.168.1.42/24 brd 192.168.1.255 scope global dynamic enp0s31f6\n3: wlp0s20f3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP\n    inet 192.168.1.78/24 brd 192.168.1.255 scope global dynamic wlp0s20f3';}
+
+function systemctl(a){if(a[0]==='status')return '● ubuntu\n    State: running\n     Jobs: 0 queued\n   Failed: 0 units\n    Since: '+new Date().toDateString()+'\n   CGroup: /\n           ├─init.scope\n           └─system.slice';if(a[0]==='list-units')return 'UNIT                          LOAD   ACTIVE SUB     DESCRIPTION\nNetworkManager.service        loaded active running Network Manager\ngdm.service                   loaded active running GNOME Display Manager\nsnapd.service                 loaded active running Snap Daemon';return '';}
+
+function calText(){const d=new Date(),y=d.getFullYear(),m=d.getMonth();const names=['January','February','March','April','May','June','July','August','September','October','November','December'];const first=new Date(y,m,1).getDay();const days=new Date(y,m+1,0).getDate();const header=names[m]+' '+y;const pad=Math.max(0,Math.floor((20-header.length)/2));let s=' '.repeat(pad)+header+'\nSu Mo Tu We Th Fr Sa\n';let row='';for(let i=0;i<first;i++)row+='   ';for(let dd=1;dd<=days;dd++){const cell=String(dd).padStart(2);row+=(dd===d.getDate()?`<span class="red">${cell}</span>`:cell)+' ';if((first+dd)%7===0){s+=row.replace(/\s+$/,'')+'\n';row='';}}if(row.trim())s+=row.replace(/\s+$/,'');return s;}
+
+function neofetch(){
+ const info=[
+  ['','<span class="g">user</span><span class="wht">@</span><span class="g">ubuntu</span>'],
+  ['','-----------'],
+  ['OS','Ubuntu 22.04.3 LTS x86_64'],
+  ['Host','GNOME Terminal Edition'],
+  ['Kernel','6.5.0-14-generic'],
+  ['Uptime',upStr()],
+  ['Packages',PKGS.size+' (dpkg), 4 (snap)'],
+  ['Shell','bash 5.1.16'],
+  ['Resolution',window.innerWidth+'x'+window.innerHeight],
+  ['DE','GNOME 42.9'],
+  ['WM','Mutter'],
+  ['WM Theme','Yaru-dark'],
+  ['Theme','Yaru-dark [GTK3]'],
+  ['Icons','Yaru [GTK3]'],
+  ['Terminal','gnome-terminal'],
+  ['CPU','Intel i7-1165G7 (8) @ 2.80GHz'],
+  ['GPU','Intel Iris Xe Graphics'],
+  ['Memory','2611MiB / 7851MiB'],
+ ];
+ const rows=Math.max(UBU.length,info.length+2);let s='';
+ for(let i=0;i<rows;i++){
+  const l=(UBU[i]||'').padEnd(42);
+  let r='';
+  if(i<info.length){const[k,v]=info[i];r=k?`<span class="org">${k}</span><span class="wht">: </span>${v}`:v;}
+  else if(i===info.length+1){const cols=['#2e3436','#cc0000','#4e9a06','#c4a000','#3465a4','#75507b','#06989a','#d3d7cf'];r=cols.map(c=>`<span style="color:${c}">███</span>`).join('');}
+  s+=`<span class="ubu">${esc(l)}</span>${r}\n`;
+ }
+ return s.replace(/\n$/,'');
+}
+
+let topTimer=null;
+function topCmd(which){
+ busy=true;
+ const head=print('');
+ const procs=[['1842','user','gnome-shell',6.2,18.1],['994','root','Xorg',3.4,4.2],['2103','user','nautilus',2.1,9.0],['2477','user','bash',0.0,0.4],[' 612','syst+','systemd-resolve',0.2,0.3],['3012','user',which,1.4,0.6],['   1','root','systemd',0.0,0.3]];
+ let ticks=0;
+ function bar(p,w=26){const f=Math.max(0,Math.min(w,Math.round(p/100*w)));return '<span class="wht">[</span><span class="grn">'+'|'.repeat(f)+'</span>'+' '.repeat(w-f)+(p.toFixed(1)+'%').padStart(6)+'<span class="wht">]</span>';}
+ function draw(){
+  const c1=Math.min(100,12+Math.random()*38),c2=Math.min(100,8+Math.random()*34);
+  const mem=2611+Math.floor(Math.random()*160);const memPct=mem/7851*100;
+  let s=`<span class="cyn">${which==='htop'?'htop 3.0.5':'top - '+new Date().toLocaleTimeString('en-GB')}</span>   Tasks: <span class="grn">218</span> total   <span class="gry">press q to quit</span>\n`;
+  s+=`  1 ${bar(c1)}   Tasks: 218, 1 running\n`;
+  s+=`  2 ${bar(c2)}   Load average: ${(c1/40).toFixed(2)} ${(c2/50).toFixed(2)} 0.31\n`;
+  s+=`  Mem${bar(memPct)} <span class="gry">${mem}M/7851M</span>\n`;
+  s+=`  Swp<span class="wht">[</span>${' '.repeat(26)}  0.0%<span class="wht">]</span> <span class="gry">0M/2047M</span>\n\n`;
+  s+=`<span style="background:#1a5fb4;color:#fff">  PID USER     %CPU %MEM     TIME+  COMMAND                        </span>\n`;
+  s+=procs.map(p=>{const cpu=(p[3]+Math.random()*2.5);const mp=p[4];return `${p[0].padStart(5)} ${p[1].padEnd(8)} ${cpu.toFixed(1).padStart(4)} ${mp.toFixed(1).padStart(4)}  0:${String(ticks%60).padStart(2,'0')}.${String((ticks*13)%100).padStart(2,'0')}  ${p[2]===which?`<span class="grn">${p[2]}</span>`:p[2]}`;}).join('\n');
+  head.innerHTML=s;ticks++;term.scrollTop=term.scrollHeight;
+ }
+ draw();topTimer=setInterval(draw,1000);
+ function stop(e){if(e.key==='q'||e.key==='Q'||(e.ctrlKey&&(e.key==='c'||e.key==='C'))){e.preventDefault();clearInterval(topTimer);topTimer=null;document.removeEventListener('keydown',stop,true);busy=false;finish();}}
+ document.addEventListener('keydown',stop,true);
+}
+
+function aptCmd(a,sudo){
+ busy=true;
+ const sub=a[0];const pkg=a.filter(x=>!x.startsWith('-'))[1];
+ const done=()=>{busy=false;finish();};
+ const stream=(arr,i=0)=>{if(i>=arr.length){done();return;}const item=arr[i];print(item[0]);setTimeout(()=>stream(arr,i+1),item[1]);};
+ if(sub==='update'){
+  stream([
+   ['<span class="grn">Hit:1</span> http://archive.ubuntu.com/ubuntu jammy InRelease',180],
+   ['<span class="grn">Hit:2</span> http://security.ubuntu.com/ubuntu jammy-security InRelease',170],
+   ['<span class="grn">Get:3</span> http://archive.ubuntu.com/ubuntu jammy-updates InRelease [119 kB]',280],
+   ['<span class="grn">Get:4</span> http://archive.ubuntu.com/ubuntu jammy-backports InRelease [109 kB]',240],
+   ['Fetched 228 kB in 1s (201 kB/s)',360],
+   ['Reading package lists... Done',420],
+   ['Building dependency tree... Done',260],
+   ['Reading state information... Done',180],
+   ['<span class="yel">12 packages can be upgraded. Run \'apt list --upgradable\' to see them.</span>',60],
+  ]);return;
+ }
+ if(sub==='install'){
+  if(!pkg){print('<span class="red">E: Unable to find a package to install.</span>');return done();}
+  if(PKGS.has(pkg)){print(`<span class="gry">Reading package lists... Done</span>`);print(`${pkg} is already the newest version (1.0-1).`);print('0 upgraded, 0 newly installed, 0 to remove and 12 not upgraded.');return done();}
+  if(!sudo){print('<span class="red">E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)</span>');print('<span class="red">E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?</span>');return done();}
+  const kb=20+Math.floor(Math.random()*120),disk=80+Math.floor(Math.random()*420);
+  stream([
+   ['Reading package lists... Done',360],
+   ['Building dependency tree... Done',340],
+   ['Reading state information... Done',240],
+   ['The following NEW packages will be installed:',140],
+   [`  <span class="grn">${esc(pkg)}</span>`,160],
+   [`0 upgraded, 1 newly installed, 0 to remove and 12 not upgraded.`,160],
+   [`Need to get ${kb} kB of archives.`,150],
+   [`After this operation, ${disk} kB of additional disk space will be used.`,220],
+   [`<span class="grn">Get:1</span> http://archive.ubuntu.com/ubuntu jammy/universe amd64 ${esc(pkg)} amd64 1.0-1 [${kb} kB]`,520],
+   [`Fetched ${kb} kB in 0s (${kb*5} kB/s)`,320],
+   [`Selecting previously unselected package ${esc(pkg)}.`,200],
+   ['(Reading database ... 184293 files and directories currently installed.)',240],
+   [`Preparing to unpack .../${esc(pkg)}_1.0-1_amd64.deb ...`,240],
+   [`Unpacking ${esc(pkg)} (1.0-1) ...`,440],
+   [`Setting up ${esc(pkg)} (1.0-1) ...`,420],
+   ['Processing triggers for man-db (2.10.2-1) ...',300],
+  ],0);
+  setTimeout(()=>{PKGS.add(pkg);},3600);
+  return;
+ }
+ if(sub==='remove'||sub==='purge'){
+  if(!sudo){print('<span class="red">E: Unable to acquire the dpkg frontend lock, are you root?</span>');return done();}
+  if(!pkg){print('<span class="red">E: Unable to find a package.</span>');return done();}
+  stream([['Reading package lists... Done',340],['Building dependency tree... Done',320],['The following packages will be REMOVED:',160],[`  <span class="red">${esc(pkg)}</span>`,140],['0 upgraded, 0 newly installed, 1 to remove and 12 not upgraded.',160],[`After this operation, 102 kB disk space will be freed.`,200],['(Reading database ... 184293 files and directories currently installed.)',220],[`Removing ${esc(pkg)} (1.0-1) ...`,440],['Processing triggers for man-db (2.10.2-1) ...',280]]);
+  setTimeout(()=>{PKGS.delete(pkg);},1500);return;
+ }
+ if(sub==='upgrade'||sub==='full-upgrade'||sub==='dist-upgrade'){
+  if(!sudo){print('<span class="red">E: Unable to acquire the dpkg frontend lock, are you root?</span>');return done();}
+  stream([['Reading package lists... Done',360],['Building dependency tree... Done',340],['Calculating upgrade... Done',300],['The following packages will be upgraded:',160],['  firefox libc6 libc-bin tzdata',160],['4 upgraded, 0 newly installed, 0 to remove.',150],['Need to get 78.2 MB of archives.',180],['<span class="grn">Get:1</span> firefox 122.0 [76.1 MB]',500],['Fetched 78.2 MB in 2s (39 MB/s)',400],['Setting up libc6 ... Done',350],['Setting up firefox (122.0) ... Done',400]]);return;
+ }
+ if(sub==='list'){const up=a.includes('--upgradable');if(up){print('Listing... Done');print('firefox/jammy-updates 122.0 amd64 [upgradable from: 121.0]');print('libc6/jammy-updates 2.35-0ubuntu3.5 amd64 [upgradable from: 2.35-0ubuntu3.4]');}else{print('Listing... Done');print([...PKGS].sort().map(p=>`${p}/jammy,now 1.0-1 amd64 [installed]`).join('\n'));}return done();}
+ if(sub==='moo'){print('<span class="wht">'+esc("                 (__) \n                 (oo) \n           /------\\/ \n          / |    ||   \n         *  /\\---/\\ \n            ~~   ~~   \n....\"Have you mooed today?\"...")+'</span>');return done();}
+ if(sub==='search'){print('<span class="gry">Sorting... Done</span>');print('<span class="gry">Full Text Search... Done</span>');print(`<span class="bgrn">${esc(pkg||'pattern')}</span>/jammy 1.0-1 amd64\n  matching package`);return done();}
+ if(sub==='show'){print(`Package: ${esc(pkg||'bash')}\nVersion: 1.0-1\nPriority: optional\nSection: universe/utils\nMaintainer: Ubuntu Developers\nArchitecture: amd64\nDescription: ${esc(pkg||'bash')} package`);return done();}
+ print(`<span class="gry">apt ${esc(sub||'')}: choose from update, install, remove, upgrade, list, search, show, moo</span>`);done();
+}
+
+function pingCmd(a){
+ busy=true;
+ const host=a.filter(x=>!x.startsWith('-'))[0]||'ubuntu.com';
+ const ips={'ubuntu.com':'185.125.190.21','google.com':'142.250.187.78','github.com':'140.82.121.3','localhost':'127.0.0.1','1.1.1.1':'1.1.1.1'};
+ const ip=ips[host]||'93.184.216.34';
+ print(`PING ${esc(host)} (${ip}) 56(84) bytes of data.`);
+ let n=0;const max=4;
+ const iv=setInterval(()=>{
+  if(n>=max){clearInterval(iv);document.removeEventListener('keydown',stop,true);const avg=(10+Math.random()*20).toFixed(3);print('');print(`--- ${esc(host)} ping statistics ---`);print(`${max} packets transmitted, ${max} received, 0% packet loss, time ${max*1000-100}ms`);print(`rtt min/avg/max/mdev = 9.${(Math.random()*900|0)}/${avg}/4${(Math.random()*9|0)}.${(Math.random()*900|0)}/3.142 ms`);busy=false;finish();return;}
+  const ms=(9+Math.random()*30).toFixed(1);print(`64 bytes from ${ip}: icmp_seq=${n+1} ttl=117 time=${ms} ms`);n++;
+ },700);
+ function stop(e){if(e.ctrlKey&&(e.key==='c'||e.key==='C')){e.preventDefault();clearInterval(iv);document.removeEventListener('keydown',stop,true);print('');print(`--- ${esc(host)} ping statistics ---`);print(`${n} packets transmitted, ${n} received, 0% packet loss`);busy=false;finish();}}
+ document.addEventListener('keydown',stop,true);
+}
+
+function netCmd(cmd,a){const url=a.filter(x=>!x.startsWith('-')).pop()||'';return `<span class="gry">${cmd}: this is a sandboxed shell with no network access.\n(${esc(url||'no URL given')})  A real connection would need a backend.</span>`;}
+
+function pyCmd(a){
+ if(a.includes('--version')||a.includes('-V'))return 'Python 3.10.12';
+ if(a[0]==='-c'){const code=a.slice(1).join(' ').replace(/^["']|["']$/g,'');const m=code.match(/print\s*\((.+)\)\s*$/);if(m){try{const v=Function('"use strict";return ('+m[1].replace(/'/g,'"')+')')();return esc(String(v));}catch(e){return esc(m[1]);}}return '';}
+ const f=a.filter(x=>!x.startsWith('-'))[0];if(f){const p=rsv(cwd,f);if(ex(p)&&!isd(p)){const m=(FS[p].data||'').match(/print\s*\((.+)\)/);if(m){try{return esc(String(Function('return ('+m[1].replace(/'/g,'"')+')')()));}catch(e){return 'Hello from Ubuntu';}}return '';}return `<span class="red">python3: can't open file '${esc(f)}': [Errno 2] No such file or directory</span>`;}
+ return 'Python 3.10.12 (main, Nov 20 2023, 15:14:05) [GCC 11.4.0] on linux\nType "help", "copyright", "credits" or "license" for more information.\n<span class="gry">(interactive REPL not supported here — use: python3 -c "print(1+1)")</span>';
+}
+function nodeEval(code){code=code.replace(/^["']|["']$/g,'');const m=code.match(/console\.log\s*\((.+)\)/);if(m){try{return esc(String(Function('return ('+m[1]+')')()));}catch(e){return esc(code);}}try{return esc(String(Function('return ('+code+')')()));}catch(e){return '';}}
+
+function gitCmd(a){const s=a[0];if(s==='--version')return 'git version 2.34.1';if(s==='status')return 'On branch <span class="grn">main</span>\nYour branch is up to date with \'origin/main\'.\n\nnothing to commit, working tree clean';if(s==='log')return '<span class="yel">commit a1b2c3d4e5f6 (HEAD -> <span class="grn">main</span>, <span class="red">origin/main</span>)</span>\nAuthor: User <user@ubuntu>\nDate:   '+new Date().toDateString()+'\n\n    Initial commit';if(s==='branch')return '* <span class="grn">main</span>';if(s==='init')return 'Initialized empty Git repository in '+cwd+'/.git/';if(s==='diff')return '';if(s==='pull')return 'Already up to date.';return `git: '${esc(s||'')}' is not a git command. See 'git --help'.`;}
+
+function editorMsg(cmd,a){const f=a.filter(x=>!x.startsWith('-'))[0];if(!f)return `<span class="gry">${cmd}: this demo has no full-screen editor. Try: echo "text" > file.txt</span>`;const p=rsv(cwd,f);const exists=ex(p)&&!isd(p);return `<span class="gry">${cmd} ${esc(f)} — ${exists?'opening ('+(FS[p].data||'').split('\n').length+' lines)':'new file'}.\nThis demo has no interactive editor; use: echo "..." > ${esc(f)} or cat ${esc(f)}</span>`;}
+
+function cowsay(t){const w=t.length;const top=' '+'_'.repeat(w+2);const bot=' '+'-'.repeat(w+2);const cow=`${top}\n< ${t} >\n${bot}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`;return esc(cow);}
+
+function fortune(){const f=['The best way to predict the future is to implement it.','rm -rf / — just kidding. Never run that.','There are 10 kinds of people: those who read binary and those who don\'t.','sudo: making sandwiches since 1980.','It works on my machine. — every developer, ever.','Unix IS user-friendly. It is just selective about its friends.','To err is human; to really foul things up requires a computer.','A user interface is like a joke. If you have to explain it, it is not that good.'];return esc(f[Math.floor(Math.random()*f.length)]);}
+
+function figlet(t){const F={A:[' ▄▀█ ','█▀█ '],B:['█▄ ','█▄█'],C:['█▀▀','█▄▄'],D:['█▀▄','█▄▀'],E:['█▀▀','██▄'],F:['█▀▀','█▀ '],G:['█▀▀','█▄█'],H:['█ █','█▀█'],I:['█','█'],J:[' █','▄█'],K:['█▄▀','█ █'],L:['█  ','█▄▄'],M:['█▀▄▀█','█ ▀ █'],N:['█▄ █','█ ▀█'],O:['█▀█','█▄█'],P:['█▀█','█▀ '],Q:['█▀█','▀▀█'],R:['█▀█','█▀▄'],S:['█▀','▄█'],T:['▀█▀',' █ '],U:['█ █','█▄█'],V:['█ █','▀▄▀'],W:['█ ▀ █','▀▄▀▄▀'],X:['▀▄▀','█▀█'],Y:['█▄█',' █ '],Z:['▀█','█▄'],' ':['  ','  '],'0':['█▀█','█▄█'],'1':['▄█',' █'],'2':['▀█','█▄'],'3':['▀█','▀█'],'4':['█▄█','  █'],'5':['█▀','▄█'],'6':['█▀','█▄'],'7':['▀█',' █'],'8':['█▀█','█▄█'],'9':['█▀█',' ▄█']};let r=['',''];for(const ch of t.toUpperCase()){const g=F[ch]||['▒▒','▒▒'];r[0]+=g[0]+' ';r[1]+=g[1]+' ';}return `<span class="org">${r[0]}\n${r[1]}</span>`;}
+
+function slTrain(){return '<span class="yel">'+esc("      ====        ________                ___________\n  _D _|  |_______/        \\__I_I_____===__|_________|\n   |(_)---  |   H\\________/ |   |        =|___ ___|   _________________\n   /     |  |   H  |  |     |   |         ||_| |_||  _|                \\_____A\n  |      |  |   H  |__--------------------| [___] |  =|                        |\n  | ________|___H__/__|_____/[][]~\\_______|       |  -|                        |\n  |/ |   |-----------I_____I [][] []  D   |=======|____|________________________|_\n__/ =| o |=-~~\\  /~~\\  /~~\\  /~~\\ ____Y___________|__|__________________________|_\n |/-=|___|=    ||    ||    ||    |_____/~\\___/          |_D__D__D_|  |_D__D__D_|\n  \\_/      \\O=====O=====O=====O_/      \\_/               \\_/   \\_/    \\_/   \\_/")+'</span>\n<span class="gry">(you typed `sl` — did you mean `ls`?)</span>';}
+
+function manCmd(a){const c=a[a.length-1];const M={
+ ls:`<span class="wht">LS(1)</span>                              User Commands                             <span class="wht">LS(1)</span>\n\n<span class="wht">NAME</span>\n       ls - list directory contents\n\n<span class="wht">SYNOPSIS</span>\n       ls [OPTION]... [FILE]...\n\n<span class="wht">DESCRIPTION</span>\n       List information about the FILEs (the current directory by default).\n       Sort entries alphabetically.\n\n       <span class="bgrn">-a</span>, <span class="bgrn">--all</span>\n              do not ignore entries starting with .\n\n       <span class="bgrn">-l</span>     use a long listing format\n\n       <span class="bgrn">-h</span>, <span class="bgrn">--human-readable</span>\n              with -l, print sizes like 1K 234M 2G etc.\n\n<span class="gry">Manual page ls(1) line 1 (press q to quit)</span>`,
+ cd:`<span class="wht">CD(1P)</span>\n\n<span class="wht">NAME</span>\n       cd - change the working directory\n\n<span class="wht">SYNOPSIS</span>\n       cd [directory]\n\n<span class="wht">DESCRIPTION</span>\n       Change the current working directory to <directory>.\n       With no argument, change to the home directory $HOME.`,
+ grep:`<span class="wht">GREP(1)</span>\n\n<span class="wht">NAME</span>\n       grep - print lines that match patterns\n\n<span class="wht">SYNOPSIS</span>\n       grep [OPTION...] PATTERNS [FILE...]\n\n<span class="wht">DESCRIPTION</span>\n       grep searches for PATTERNS in each FILE.\n\n       <span class="bgrn">-i</span>   Ignore case distinctions in patterns and input data.\n       <span class="bgrn">-v</span>   Invert the sense of matching, to select non-matching lines.`,
+ sudo:`<span class="wht">SUDO(8)</span>\n\n<span class="wht">NAME</span>\n       sudo - execute a command as another user\n\n<span class="wht">SYNOPSIS</span>\n       sudo command\n\n<span class="wht">DESCRIPTION</span>\n       sudo allows a permitted user to execute a command as the\n       superuser or another user.`,
+ apt:`<span class="wht">APT(8)</span>\n\n<span class="wht">NAME</span>\n       apt - command-line interface\n\n<span class="wht">SYNOPSIS</span>\n       apt [options] command\n\n<span class="wht">COMMANDS</span>\n       update     - Retrieve new lists of packages\n       upgrade    - Perform an upgrade\n       install    - Install new packages\n       remove     - Remove packages\n       list       - List packages`,
+ man:`<span class="wht">MAN(1)</span>\n\n<span class="wht">NAME</span>\n       man - an interface to the system reference manuals\n\n<span class="wht">SYNOPSIS</span>\n       man [page]\n\n<span class="wht">DESCRIPTION</span>\n       man is the system's manual pager.`,
+ echo:`<span class="wht">ECHO(1)</span>\n\n<span class="wht">NAME</span>\n       echo - display a line of text\n\n<span class="wht">SYNOPSIS</span>\n       echo [SHORT-OPTION]... [STRING]...\n\n<span class="wht">DESCRIPTION</span>\n       Echo the STRING(s) to standard output.\n       <span class="bgrn">-e</span>   enable interpretation of backslash escapes`,
+};
+ if(!c||c==='man')return M.man;
+ return M[c]||`No manual entry for ${esc(c)}`;
+}
+
+function helpText(){
+ const cmds=['ls','cd','pwd','cat','echo','mkdir','touch','rm','cp','mv','tree','grep','find','head','tail','wc','sort','uniq','df','free','ps','top','htop','neofetch','uname','lscpu','apt','sudo','man','git','python3','node','ping','cowsay','fortune','figlet','date','cal','history','clear','exit'];
+ let grid='';cmds.forEach((c,i)=>{grid+=`<span class="exe">${c.padEnd(11)}</span>`;if((i+1)%5===0)grid+='\n';});
+ return `<span class="org">GNU bash, version 5.1.16 — common commands on this Ubuntu shell:</span>\n\n${grid}\n\n<span class="gry">Files you create here are real (in memory) · Tab completes paths · ↑/↓ recalls history · Ctrl+C interrupts · Ctrl+L clears</span>`;
+}
+
+/* =====================================================================
+   Window chrome behavior
+   ===================================================================== */
+const win=document.getElementById('win');
+const hbar=document.getElementById('hbar');
+let maxed=false,prev={};
+function doMax(){if(!maxed){prev={w:win.style.width,h:win.style.height,m:win.style.margin,r:win.style.borderRadius};win.style.width='100vw';win.style.height='100vh';win.style.borderRadius='0';maxed=true;}else{win.style.width='';win.style.height='';win.style.borderRadius='';maxed=false;}}
+document.querySelector('.cbtn.max').addEventListener('click',doMax);
+hbar.addEventListener('dblclick',e=>{if(!e.target.closest('.ctrls')&&!e.target.closest('.menu-btn'))doMax();});
+document.querySelector('.cbtn.min').addEventListener('click',()=>{win.style.transition='transform .25s ease, opacity .25s ease';win.style.transform='scale(.6) translateY(60vh)';win.style.opacity='0';setTimeout(()=>{win.style.transform='';win.style.opacity='';win.style.transition='';if(activeIn)activeIn.focus();},700);});
+document.querySelector('.cbtn.close').addEventListener('click',()=>{win.style.transition='transform .2s ease, opacity .2s ease';win.style.transform='scale(.92)';win.style.opacity='0';setTimeout(()=>{print('<span class="gry">[Process completed]</span>');win.style.transform='';win.style.opacity='';win.style.transition='';},500);});
+
+// drag the window (only when not maximized)
+hbar.addEventListener('mousedown',e=>{
+ if(e.target.closest('.ctrls')||e.target.closest('.menu-btn')||maxed)return;
+ hbar.classList.add('drag');
+ const r=win.getBoundingClientRect();
+ win.style.position='fixed';win.style.margin='0';
+ win.style.left=r.left+'px';win.style.top=r.top+'px';
+ const sx=e.clientX,sy=e.clientY,ol=r.left,ot=r.top;
+ const mv=ev=>{win.style.left=Math.max(0,ol+ev.clientX-sx)+'px';win.style.top=Math.max(0,ot+ev.clientY-sy)+'px';};
+ const up=()=>{hbar.classList.remove('drag');document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+ document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+});
+
+// hamburger menu
+const menuBtn=document.getElementById('menu-btn');
+menuBtn.addEventListener('click',e=>{
+ e.stopPropagation();
+ const items=[['New Window',()=>window.open(location.href,'_blank')],['Copy',()=>{const s=window.getSelection().toString();if(s)navigator.clipboard&&navigator.clipboard.writeText(s);}],['Clear',()=>{clearT();if(!busy)finish();}],['Reset',()=>{location.reload();}]];
+ const m=document.createElement('div');
+ m.style.cssText='position:fixed;z-index:50;background:#383838;border:1px solid #1b1b1b;border-radius:9px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:6px;min-width:170px;font-size:13.5px;color:#fff';
+ const r=menuBtn.getBoundingClientRect();m.style.top=(r.bottom+6)+'px';m.style.left=Math.min(r.left,window.innerWidth-190)+'px';
+ items.forEach(([label,fn])=>{const it=document.createElement('div');it.textContent=label;it.style.cssText='padding:8px 12px;border-radius:6px;cursor:pointer';it.onmouseenter=()=>it.style.background='#E95420';it.onmouseleave=()=>it.style.background='';it.onclick=()=>{m.remove();fn();};m.appendChild(it);});
+ document.body.appendChild(m);
+ const close=ev=>{if(!m.contains(ev.target)){m.remove();document.removeEventListener('mousedown',close);}};
+ setTimeout(()=>document.addEventListener('mousedown',close),0);
+});
+
+// keep terminal focused
+document.addEventListener('keydown',e=>{
+ if(busy)return;
+ const tag=(e.target.tagName||'').toLowerCase();
+ if(tag==='input')return;
+ // typing anywhere focuses the prompt
+ if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&activeIn){activeIn.focus();}
+});
+
+/* =====================================================================
+   Boot greeting
+   ===================================================================== */
+setTitle();
+print('<span class="wht">Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 6.5.0-14-generic x86_64)</span>');
+print('');
+print(' * Documentation:  <span class="blu">https://help.ubuntu.com</span>');
+print(' * Management:     <span class="blu">https://landscape.canonical.com</span>');
+print(' * Support:        <span class="blu">https://ubuntu.com/advantage</span>');
+print('');
+print('<span class="gry">Last login: '+new Date().toUTCString().replace('GMT','')+' on tty1</span>');
+print('Type <span class="bgrn">help</span> to see available commands, or <span class="bgrn">neofetch</span> to start.');
+print('');
+newInput();
+</script>
+</body>
+</html>
