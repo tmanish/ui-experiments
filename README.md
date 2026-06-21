@@ -32,7 +32,7 @@ A desktop environment running an **actual Python interpreter** — CPython 3.12 
 
 The real thing. An actual x86 Linux machine emulated in the browser via **v86** (WebAssembly), rendered through xterm.js over the emulated serial port. It boots a genuine Linux kernel (Buildroot / BusyBox) and drops you at a real shell. There's an actual kernel running behind the prompt.
 
-**Running it:** the emulator, BIOS, and kernel are fetched from a CDN, so it must be served over **http** — open it on GitHub Pages, or locally with a server (`python3 -m http.server 8000`, then `http://localhost:8000/ui/nebula-terminal.html`). Opening the file directly from a `file://` path won't work, because browsers block those cross-origin downloads from local files.
+**Running it:** the BIOS and Linux kernel load from a same-origin `assets/` folder first (most reliable — no third-party host), falling back to a CDN if they aren't there. Place `buildroot-bzimage.bin`, `seabios.bin`, and `vgabios.bin` in `ui/assets/` so the boot never depends on an outside server. It must be served over **http** — GitHub Pages, or locally with `python3 -m http.server 8000` (then `http://localhost:8000/ui/nebula-terminal.html`). Opening it from a `file://` path won't work, because browsers block downloads from local files.
 
 ### Ubuntu Terminal
 
