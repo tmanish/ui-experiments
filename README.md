@@ -2,36 +2,47 @@
 
 > Pixel-perfect, high-fidelity user interfaces — built entirely in the browser, obsessed over to the last detail.
 
-This is a **design-first** repository: a showcase of user interface experiments built to a standard of **perfectionist user experience**. Every pixel, every transition, every interaction is deliberate. The interest here isn't features — it's *fidelity*. How close can a browser get to the real thing, and how good can it feel getting there.
+This is a **design-first** repository: a showcase of user interface experiments built to a standard of **perfectionist user experience**. Every pixel, every transition, every interaction is deliberate. The interest here isn't features — it's *fidelity*. How close can a browser get to the real thing, and how good can it feel getting there. And none of it is a mockup — open a shell and the commands actually run.
 
 Each piece is a self-contained, browser-native interface. Nothing to install, nothing to clone — open the live link and use it.
 
+**Built by a Linux fanboy, for Linux fanboys.** Once a Linux fanboy, always a Linux fanboy.
+
 ## ▸ View live
 
-- **Aurora OS** — <a href="https://tmanish.github.io/ui-experiments/ui/aurora-os.html">https://tmanish.github.io/ui-experiments/ui/aurora-os.html</a>
-- **Ubuntu Terminal** — <a href="https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html">https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html</a>
+- **Home** — https://tmanish.github.io/ui-experiments/
+- **Nebula OS** — https://tmanish.github.io/ui-experiments/ui/nebula-os.html
+- **Aurora OS** — https://tmanish.github.io/ui-experiments/ui/AuroraOS.html
+- **Nebula Terminal** — https://tmanish.github.io/ui-experiments/ui/nebula-terminal.html
+- **Ubuntu Terminal** — https://tmanish.github.io/ui-experiments/ui/ubuntu-terminal.html
 
 ## The experiments
 
+Two original desktops, a real machine emulated in the browser, and a faithful recreation of an existing one — the collection is meant to cover the range.
+
+### Nebula OS
+
+A self-contained **desktop environment** with its own deep-space visual identity — a boot sequence, a starfield, a live-clock top bar, and a dock. A full window manager (draggable, resizable, focusable windows) hosts a suite of apps: a terminal, file manager, text editor, calculator, a sandboxed browser, and a system monitor. The terminal and file manager share one in-memory filesystem, so what you create in one shows up in the other. A complete, original **user interface** that doesn't imitate any existing OS.
+
 ### Aurora OS
 
-A complete desktop **user interface** rendered in a single browser tab — and beneath the surface, a real one. It runs an actual CPython 3.12 interpreter (compiled to WebAssembly), not a mock shell printing canned output. A high-fidelity window manager wraps it: draggable, resizable, focusable, minimizable windows, a virtual filesystem, and a hand-built SVG icon set drawn to match.
+A desktop environment running an **actual Python interpreter** — CPython 3.12 compiled to WebAssembly via Pyodide. A genuine REPL you can program against, plus a file manager, editor, and system monitor, all inside a real window manager. Not a simulated shell printing canned output; the real interpreter, in a browser tab. (Loads the Pyodide runtime on first launch.)
 
-The design goal: a desktop that doesn't just *look* like a real environment, but behaves like one.
+### Nebula Terminal
+
+The real thing. An actual x86 Linux machine emulated in the browser via **v86** (WebAssembly), rendered through xterm.js over the emulated serial port. It boots a genuine Linux kernel (Buildroot / BusyBox) and drops you at a real shell. There's an actual kernel running behind the prompt.
+
+**Running it:** the emulator, BIOS, and kernel are fetched from a CDN, so it must be served over **http** — open it on GitHub Pages, or locally with a server (`python3 -m http.server 8000`, then `http://localhost:8000/ui/nebula-terminal.html`). Opening the file directly from a `file://` path won't work, because browsers block those cross-origin downloads from local files.
 
 ### Ubuntu Terminal
 
-A **pixel-perfect** recreation of the Ubuntu 22.04 LTS GNOME Terminal — Yaru-dark window chrome on the iconic aubergine surface, Ubuntu Mono set at the right weight, the green-and-blue bash prompt exact to the original. Underneath sits a simulated bash with ~70 commands and an in-memory filesystem.
-
-The **UX** is the point: `neofetch` renders the Ubuntu ASCII logo with live system info, `apt install` streams realistic download output, `htop` animates, `man` pages read true. Pipes, redirection (`>`, `>>`), Tab completion, command history, and `Ctrl+C` / `Ctrl+L` all behave the way muscle memory expects.
-
-*Honest scope:* this is a **high-fidelity** *simulation* of bash, not a Linux kernel — there's no network layer (`curl` / `ssh` report no connection) and `vim` isn't a full-screen editor. The fidelity is in the feel. Start with `neofetch`, then `sudo apt install cowsay` → `cowsay hi`.
+A **pixel-perfect** recreation of the Ubuntu 22.04 LTS GNOME Terminal — the iconic aubergine surface, Yaru-dark chrome, the exact green-and-blue bash prompt. Underneath sits a simulated bash with ~70 commands over an in-memory filesystem: `neofetch` with the Ubuntu logo, `apt install` with streaming download output, animated `htop`, pipes, redirection, Tab completion, and history. A high-fidelity simulation tuned for feel. *(Honest scope: not a kernel — `curl` / `ssh` report no network, and `vim` isn't a full-screen editor.)*
 
 ## The standard
 
 - **Pixel-perfect.** Spacing, color, type, and chrome are matched to reference, not approximated.
 - **Perfectionist UX.** Interactions are tuned until they feel right — timing, focus, motion, keyboard behavior.
-- **High fidelity over breadth.** One interface done convincingly beats ten done halfway.
+- **Actually runs.** Not screenshots — type a command and it responds. A real Python interpreter and an emulated Linux kernel run live in the page, with faithful simulations elsewhere.
 - **Real where it counts.** Where the browser can genuinely do it, it does; where something is a simulation, that's stated plainly.
 - **Single file.** Each experiment is one self-contained `.html` — the whole design, in one place.
 
