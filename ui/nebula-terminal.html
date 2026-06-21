@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaOS — Linux Terminal</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<style>
+  :root{
+    --bg:#070a10; --panel:#0d1320; --panel-2:#111a2b; --line:#1f2a3d; --line-2:#2a3a54;
+    --txt:#c8d3e6; --dim:#7587a3; --faint:#4a5870;
+    --cyan:#38e8d0; --cyan-dim:#1fa996; --amber:#f5a623; --green:#4ade80; --red:#f06c75; --magenta:#e85aad;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:'IBM Plex Sans',sans-serif; color:var(--txt);
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(56,232,208,.10), transparent 60%),
+      radial-gradient(900px 600px at 8% 110%, rgba(232,90,173,.07), transparent 55%),
+      linear-gradient(180deg,#0a0e14,#05080d);
+    display:flex; flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* shell window */
+  .frame{
+    flex:1; margin:18px; border:1px solid var(--line-2); border-radius:12px; overflow:hidden;
+    background:var(--panel); box-shadow:0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(56,232,208,.08);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .titlebar{
+    height:42px; flex:0 0 42px; display:flex; align-items:center; gap:10px; padding:0 12px;
+    background:linear-gradient(180deg,#111a2b,#0d1320); border-bottom:1px solid var(--line);
+  }
+  .traffic{display:flex; gap:7px}
+  .tl{width:12px;height:12px;border-radius:50%}
+  .tl.c{background:#ff5f57}.tl.m{background:#febc2e}.tl.x{background:#28c840}
+  .ttl{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--dim); font-weight:500}
+  .ttl b{color:var(--txt)}
+  .spacer{flex:1}
+  .pill{
+    display:flex; align-items:center; gap:7px; font-family:'IBM Plex Mono',monospace; font-size:11.5px;
+    padding:5px 11px; border-radius:20px; border:1px solid var(--line-2); color:var(--dim); background:#0a111e;
+  }
+  .pill .led{width:8px;height:8px;border-radius:50%;background:var(--faint);transition:background .3s, box-shadow .3s}
+  .pill.dl .led{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .pill.boot .led{background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:pulse 1.1s ease-in-out infinite}
+  .pill.ready .led{background:var(--green);box-shadow:0 0 9px var(--green)}
+  .pill.err .led{background:var(--red);box-shadow:0 0 9px var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .tbtn{
+    background:var(--panel-2); border:1px solid var(--line-2); color:var(--dim);
+    font-family:'IBM Plex Sans'; font-size:12px; padding:6px 13px; border-radius:7px; cursor:pointer;
+  }
+  .tbtn:hover{color:var(--txt); border-color:var(--cyan-dim)}
+  .tbtn:active{transform:translateY(1px)}
+
+  /* terminal area */
+  .stage{flex:1; position:relative; min-height:0; background:#05080d}
+  #term{position:absolute; inset:0; padding:10px 6px 6px 12px}
+  .xterm{height:100%}
+  .xterm-viewport{background-color:transparent!important}
+  .xterm-viewport::-webkit-scrollbar{width:10px}
+  .xterm-viewport::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
+
+  /* boot overlay */
+  #overlay{
+    position:absolute; inset:0; z-index:5; background:#070a10;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    font-family:'IBM Plex Mono',monospace; transition:opacity .7s ease; padding:24px;
+  }
+  #overlay.hide{opacity:0; pointer-events:none}
+  .ovlogo{font-family:'IBM Plex Sans';font-size:40px;font-weight:700;letter-spacing:-1px;color:var(--txt);margin-bottom:4px}
+  .ovlogo b{color:var(--cyan)}
+  .ovsub{color:var(--faint);font-size:12px;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:34px}
+  .stages{width:380px;max-width:84vw;text-align:left;font-size:12.5px;line-height:1.9;color:var(--dim);min-height:120px}
+  .stages .row{display:flex;align-items:center;gap:9px;opacity:.4;transition:opacity .3s}
+  .stages .row.on{opacity:1;color:var(--txt)}
+  .stages .row.done{opacity:.8}
+  .stages .ic{width:15px;height:15px;flex:0 0 15px}
+  .spin{width:13px;height:13px;border:2px solid var(--line-2);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .chk{color:var(--green)}
+  .barwrap{width:380px;max-width:84vw;height:3px;background:var(--line);border-radius:2px;margin-top:18px;overflow:hidden}
+  .barwrap i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));transition:width .25s}
+  .ovnote{margin-top:18px;color:var(--faint);font-size:11.5px;max-width:400px;line-height:1.6}
+
+  /* error card */
+  #errcard{
+    position:absolute; inset:0; z-index:6; display:none; align-items:center; justify-content:center; padding:28px;
+    background:rgba(7,10,16,.96);
+  }
+  #errcard.show{display:flex}
+  .err-inner{max-width:460px; background:var(--panel); border:1px solid var(--red); border-radius:12px; padding:26px; text-align:left}
+  .err-inner h3{color:var(--red); font-size:16px; margin-bottom:8px; display:flex; align-items:center; gap:8px}
+  .err-inner p{color:var(--dim); font-size:13px; line-height:1.65; margin-bottom:12px}
+  .err-inner code{background:#0a111e; color:var(--cyan); padding:2px 7px; border-radius:5px; font-family:'IBM Plex Mono',monospace; font-size:12px}
+  .err-detail{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint); background:#0a111e; border:1px solid var(--line); border-radius:7px; padding:10px 12px; margin-top:6px; white-space:pre-wrap; word-break:break-word; max-height:120px; overflow:auto}
+
+  .footer{
+    flex:0 0 auto; padding:8px 22px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint);
+    display:flex; gap:18px; flex-wrap:wrap; align-items:center;
+  }
+  .footer .k{color:var(--dim)}
+  .footer kbd{background:var(--panel-2);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:var(--txt);font-size:10.5px}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media (max-width:560px){ .frame{margin:8px} .footer{display:none} }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="titlebar">
+    <div class="traffic"><span class="tl c"></span><span class="tl m"></span><span class="tl x"></span></div>
+    <span class="ttl"><b>nebula</b>@linux: ~ &nbsp;·&nbsp; <span style="color:var(--faint)">v86 · buildroot</span></span>
+    <span class="spacer"></span>
+    <span class="pill" id="status"><span class="led"></span><span id="status-text">Starting…</span></span>
+    <button class="tbtn" id="btn-clear">Clear</button>
+    <button class="tbtn" id="btn-reboot">Reboot</button>
+  </div>
+
+  <div class="stage">
+    <div id="term"></div>
+
+    <div id="overlay">
+      <div class="ovlogo">Nebula<b>Linux</b></div>
+      <div class="ovsub">real linux · compiled to webassembly</div>
+      <div class="stages" id="stages">
+        <div class="row" data-k="fonts"><span class="ic"></span><span>Loading terminal frontend (xterm.js)</span></div>
+        <div class="row" data-k="engine"><span class="ic"></span><span>Loading x86 emulator (v86 + WASM)</span></div>
+        <div class="row" data-k="bios"><span class="ic"></span><span>Fetching BIOS &amp; kernel image</span></div>
+        <div class="row" data-k="boot"><span class="ic"></span><span>Booting Linux kernel</span></div>
+      </div>
+      <div class="barwrap"><i id="bar"></i></div>
+      <div class="ovnote" id="ovnote">This downloads ~6&nbsp;MB of emulator + a real Linux kernel from a CDN, then boots it entirely in your browser. First boot takes a few seconds.</div>
+    </div>
+
+    <div id="errcard">
+      <div class="err-inner">
+        <h3>⚠ Couldn't start Linux</h3>
+        <p id="err-msg">Something blocked the boot.</p>
+        <p style="color:var(--faint);font-size:12px">The emulator engine, BIOS, and a real Linux kernel are downloaded from a CDN. Browsers block these cross-origin downloads when the page is opened from a <code>file://</code> path — which is the usual cause. Run it from a local web server instead:</p>
+        <pre style="background:var(--panel-2);border:1px solid var(--line-2);border-radius:6px;padding:10px 12px;margin:10px 0;font-size:11.5px;line-height:1.6;color:var(--txt);white-space:pre-wrap;overflow:auto">cd your-repo-folder
+python3 -m http.server 8000
+# then open  http://localhost:8000/ui/nebula-terminal.html</pre>
+        <p style="color:var(--faint);font-size:12px">It also runs as-is on GitHub Pages, since that's served over http.</p>
+        <div class="err-detail" id="err-detail"></div>
+        <button class="tbtn" style="margin-top:14px" onclick="location.reload()">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span><span class="k">shell:</span> busybox ash (real)</span>
+    <span><span class="k">try:</span> uname -a · ls -la / · cat /proc/cpuinfo · vi · top · ping</span>
+    <span><span class="k">keys:</span> <kbd>Ctrl</kbd>+<kbd>C</kbd> interrupt · <kbd>Tab</kbd> complete</span>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   NebulaOS Real Linux Terminal
+   v86 (x86 -> WASM JIT) booting a Buildroot kernel, piped
+   through xterm.js over the emulated serial port (ttyS0).
+   ============================================================ */
+
+// --- Resource URLs ---------------------------------------------------
+const V86_VER    = '0.5.372'; // verified to exist on npm
+const CDN         = 'https://cdn.jsdelivr.net/npm';
+const GH          = 'https://cdn.jsdelivr.net/gh/copy/v86'; // BIOS lives in the git repo, not the npm package
+const XTERM_JS    = `${CDN}/xterm@5.3.0/lib/xterm.js`;
+const FIT_JS      = `${CDN}/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js`;
+const LIBV86_JS   = `${CDN}/v86@${V86_VER}/build/libv86.js`;
+const V86_WASM    = `${CDN}/v86@${V86_VER}/build/v86.wasm`; // v86 auto-loads v86-fallback.wasm here too (no-SAB path)
+const SEABIOS     = `${GH}/bios/seabios.bin`;
+const VGABIOS     = `${GH}/bios/vgabios.bin`;
+// Kernel image (real Linux). copy.sh hosts the v86 images with permissive CORS.
+const KERNEL      = 'https://k.copy.sh/buildroot-bzimage.bin';
+
+// --- tiny helpers ----------------------------------------------------
+const $ = (s)=>document.querySelector(s);
+const stageRow = (k)=>document.querySelector(`.row[data-k="${k}"]`);
+function setStage(k, state){ // state: 'on' | 'done'
+  const r = stageRow(k); if(!r) return;
+  const ic = r.querySelector('.ic');
+  if(state==='on'){ r.classList.add('on'); r.classList.remove('done'); ic.innerHTML='<div class="spin"></div>'; }
+  if(state==='done'){ r.classList.add('done'); r.classList.remove('on'); ic.innerHTML='<span class="chk">✓</span>'; }
+}
+function setBar(p){ $('#bar').style.width = Math.max(0,Math.min(100,p))+'%'; }
+function setStatus(cls, text){
+  const el = $('#status'); el.className='pill '+cls; $('#status-text').textContent=text;
+}
+function fail(msg, detail){
+  setStatus('err','Error');
+  $('#err-msg').textContent = msg || 'Boot failed.';
+  $('#err-detail').textContent = (detail||'').toString().slice(0,800);
+  $('#errcard').classList.add('show');
+}
+
+// --- sequential script loader with per-file error reporting ----------
+function loadScript(src, label){
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = src; s.async = false;
+    s.onload = ()=>resolve();
+    s.onerror = ()=>reject(new Error('Failed to load '+(label||src)+'.\nThe environment may be blocking this CDN request.'));
+    document.head.appendChild(s);
+  });
+}
+
+// --- main ------------------------------------------------------------
+let emulator = null;
+let booted = false;
+let term, fitAddon;
+let bootTimer = null;
+let sawFirstByte = false;
+
+(async function start(){
+  // file:// origin blocks the cross-origin CDN downloads the emulator needs.
+  // Warn up front with the fix, then still attempt (some setups allow it).
+  if(location.protocol === 'file:'){
+    const n = document.getElementById('ovnote');
+    if(n){
+      n.innerHTML = '⚠ Opened from a <b>file://</b> path. Browsers block the emulator&rsquo;s CDN downloads here. Run it from a local server &mdash; <code>python3 -m http.server</code> &mdash; then open <code>http://localhost:8000/&hellip;</code> &nbsp;(it also just works on GitHub Pages).';
+      n.style.color = '#f5a623';
+    }
+  }
+  // 1) terminal frontend
+  setStage('fonts','on');
+  try {
+    await loadScript(XTERM_JS, 'xterm.js');
+    await loadScript(FIT_JS, 'xterm-addon-fit');
+  } catch(e){ return fail('Could not load the terminal frontend (xterm.js).', e.message); }
+  if(typeof Terminal === 'undefined'){ return fail('Terminal library did not initialize.', 'window.Terminal is undefined after load.'); }
+  setStage('fonts','done');
+
+  // build the xterm instance now so the user sees a cursor immediately
+  term = new Terminal({
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontSize: 13.5,
+    lineHeight: 1.15,
+    cursorBlink: true,
+    cursorStyle: 'bar',
+    scrollback: 5000,
+    theme: {
+      background: '#05080d', foreground: '#d7e2f2', cursor: '#38e8d0',
+      cursorAccent: '#05080d', selectionBackground: 'rgba(56,232,208,0.28)',
+      black:'#0d1320', red:'#f06c75', green:'#4ade80', yellow:'#f5a623',
+      blue:'#5aa9e8', magenta:'#e85aad', cyan:'#38e8d0', white:'#c8d3e6',
+      brightBlack:'#4a5870', brightRed:'#ff7b85', brightGreen:'#6ff0a0',
+      brightYellow:'#ffc34d', brightBlue:'#7fc0ff', brightMagenta:'#ff7ec4',
+      brightCyan:'#5cf5e0', brightWhite:'#ffffff'
+    }
+  });
+  try{
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+  }catch(e){ /* fit addon optional */ }
+  term.open($('#term'));
+  try{ fitAddon && fitAddon.fit(); }catch(e){}
+  window.addEventListener('resize', ()=>{ try{ fitAddon && fitAddon.fit(); }catch(e){} });
+
+  // 2) emulator engine
+  setStage('engine','on');
+  try { await loadScript(LIBV86_JS, 'libv86.js (v86 engine)'); }
+  catch(e){ return fail('Could not load the v86 emulator engine.', e.message); }
+  const V86Ctor = window.V86 || window.V86Starter;
+  if(!V86Ctor){ return fail('v86 engine did not initialize.', 'Neither window.V86 nor window.V86Starter is defined.'); }
+  setStage('engine','done');
+
+  // 3) boot the machine
+  setStage('bios','on');
+  setStatus('dl','Downloading…');
+
+  // hidden screen container required by v86's screen adapter
+  const screen = document.createElement('div');
+  screen.style.display = 'none';
+  screen.innerHTML = '<div style="white-space:pre;font:14px monospace;line-height:14px"></div><canvas style="display:none"></canvas>';
+  document.body.appendChild(screen);
+
+  try {
+    emulator = new V86Ctor({
+      wasm_path: V86_WASM,
+      memory_size: 64 * 1024 * 1024,
+      vga_memory_size: 2 * 1024 * 1024,
+      bios:     { url: SEABIOS },
+      vga_bios: { url: VGABIOS },
+      bzimage:  { url: KERNEL, async: false },
+      filesystem: {},
+      cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on',
+      screen_container: screen,
+      disable_mouse: true,
+      autostart: true,
+    });
+  } catch(e){
+    return fail('The emulator failed to construct.', e && (e.stack||e.message) || e);
+  }
+
+  // download progress -> progress bar
+  emulator.add_listener('download-progress', (e)=>{
+    try{
+      if(e && e.total){
+        const pct = Math.round((e.loaded/e.total)*100);
+        const name = (e.file_name||'').split('/').pop();
+        if(/wasm/i.test(name)) setBar(20 + pct*0.10);
+        else if(/bios/i.test(name)) setBar(30 + pct*0.05);
+        else { setBar(35 + pct*0.45); $('#status-text').textContent = 'Downloading kernel… '+pct+'%'; }
+      }
+    }catch(_){}
+  });
+  emulator.add_listener('download-error', (e)=>{
+    fail('A required file could not be downloaded.',
+      'Failed: ' + ((e && e.file_name) || 'unknown') +
+      '\nThe kernel image is fetched from k.copy.sh — this environment may be blocking that cross-origin request.');
+  });
+
+  // when wasm + images are in, mark bios stage done and move to boot
+  emulator.add_listener('emulator-loaded', ()=>{
+    setStage('bios','done'); setStage('boot','on');
+    setStatus('boot','Booting kernel…'); setBar(85);
+  });
+
+  // --- serial bridge: guest ttyS0 <-> xterm ---
+  let outBuf = [];
+  let flushQueued = false;
+  let promptSeen = false;
+  let recentTail = '';
+
+  function flush(){
+    flushQueued = false;
+    if(!outBuf.length) return;
+    // chunk to avoid stack overflow on String.fromCharCode.apply
+    let s = '';
+    for(let i=0;i<outBuf.length;i+=4096){
+      s += String.fromCharCode.apply(null, outBuf.slice(i, i+4096));
+    }
+    outBuf = [];
+    term.write(s);
+
+    if(!sawFirstByte){ sawFirstByte = true; onFirstByte(); }
+
+    // detect a shell prompt to flip status to "Ready"
+    if(!promptSeen){
+      recentTail = (recentTail + s).slice(-80);
+      if(/(~%|\/ #|\$|#)\s*$/.test(recentTail.replace(/\x1b\[[0-9;?]*[A-Za-z]/g,''))){
+        promptSeen = true; onReady();
+      }
+    }
+  }
+  emulator.add_listener('serial0-output-byte', (byte)=>{
+    outBuf.push(byte & 0xFF);
+    if(!flushQueued){ flushQueued = true; requestAnimationFrame(flush); }
+  });
+
+  // xterm input -> guest serial
+  term.onData((data)=>{ try{ emulator.serial0_send(data); }catch(_){ } });
+
+  // boot watchdog: if nothing prints for a while, surface guidance
+  bootTimer = setTimeout(()=>{
+    if(!sawFirstByte){
+      fail('Linux did not start printing in time.',
+        'No serial output after 75s. The emulator engine or the kernel image download was most likely blocked by this environment’s network/sandbox policy.\nTip: download this file and open it in a normal browser tab — it runs fully client-side.');
+    }
+  }, 75000);
+
+  function onFirstByte(){
+    clearTimeout(bootTimer);
+    // reveal terminal: fade overlay, kernel log streams live into xterm
+    setStage('bios','done'); setStage('boot','on');
+    setStatus('boot','Booting kernel…');
+    setBar(92);
+    $('#overlay').classList.add('hide');
+    setTimeout(()=>{ try{ fitAddon && fitAddon.fit(); }catch(e){} term.focus(); }, 350);
+  }
+  function onReady(){
+    booted = true;
+    setStatus('ready','Ready');
+    setBar(100);
+    try{ fitAddon && fitAddon.fit(); }catch(e){}
+    term.focus();
+  }
+
+  // toolbar
+  $('#btn-clear').addEventListener('click', ()=>{
+    if(emulator){ try{ emulator.serial0_send('clear\n'); }catch(_){ } }
+    term.focus();
+  });
+  $('#btn-reboot').addEventListener('click', ()=>{
+    setStatus('boot','Rebooting…');
+    location.reload();
+  });
+  // click anywhere in the stage refocuses the terminal
+  $('.stage').addEventListener('mousedown', ()=>{ if(booted||sawFirstByte) setTimeout(()=>term.focus(),0); });
+})();
+</script>
+</body>
+</html>
